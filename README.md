@@ -1,5 +1,5 @@
 # IPSW Updater
-*Made by Pico Mitchell of [Free Geek](https://www.freegeek.org) using the [IPSW Downloads API](https://ipsw.me) by Callum Jones.*
+*Made by [Pico Mitchell](https://randomapplications.com) of [Free Geek](https://www.freegeek.org) using the [IPSW Downloads API](https://ipsw.me) by [Callum Jones](https://ipsw.me/about).*
 
 ### Visit [ipsw.app](https://ipsw.app) to [view release notes](https://ipsw.app/download/updates.php) and [download the latest release of the compiled app](https://ipsw.app/download/).
 

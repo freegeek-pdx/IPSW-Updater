@@ -244,43 +244,44 @@ Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is 
 				"a.displayAlert(`" & projectName & ": ${((!s)?'Source Not Decoded/Decompressed':((s.length==" & jxaMinifiedSourceLength & ")?'Runtime Error':s.substring(0,100)))}`,{message:`${e}\\n\\n${JSON.stringify(e,Object.getOwnPropertyNames(e))}`,as:'critical',buttons:['Re-Download “" & projectName & "”','Quit'],cancelButton:1,defaultButton:2})" & ¬
 				"}catch(e){a.doShellScript('/usr/bin/open https://ipsw.app/download/')}}}"))
 			
+			set quotedBuiltAppInfoPlistPath to (quoted form of (appBuildPath & "/Contents/Info.plist"))
 			do shell script ("
 chmod a-w " & (quoted form of (appBuildPath & "/Contents/Resources/Scripts/main.scpt")) & "
 
-plutil -replace CFBundleIdentifier -string " & (quoted form of (bundleIdentifierPrefix & projectNameForBundleID)) & " " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -replace CFBundleShortVersionString -string " & (quoted form of appVersion) & " " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+plutil -replace CFBundleIdentifier -string " & (quoted form of (bundleIdentifierPrefix & projectNameForBundleID)) & " " & quotedBuiltAppInfoPlistPath & "
+plutil -replace CFBundleShortVersionString -string " & (quoted form of appVersion) & " " & quotedBuiltAppInfoPlistPath & "
 
-plutil -remove LSMinimumSystemVersionByArchitecture " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -replace LSMinimumSystemVersion -string '10.13' " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+plutil -remove LSMinimumSystemVersionByArchitecture " & quotedBuiltAppInfoPlistPath & "
+plutil -replace LSMinimumSystemVersion -string '10.13' " & quotedBuiltAppInfoPlistPath & "
 
-plutil -replace LSMultipleInstancesProhibited -bool true " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+plutil -replace LSMultipleInstancesProhibited -bool true " & quotedBuiltAppInfoPlistPath & "
 
 plutil -replace NSHumanReadableCopyright -string " & (quoted form of ("Copyright © " & (year of (current date)) & " Free Geek
-Designed and Developed by Pico Mitchell")) & " " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+Designed and Developed by Pico Mitchell")) & " " & quotedBuiltAppInfoPlistPath & "
 
 # Very important to force English to catch 'User canceled.' properly and other things.
-plutil -replace CFBundleDevelopmentRegion -string 'en_US' " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -replace  CFBundleAllowMixedLocalizations -bool false " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+plutil -replace CFBundleDevelopmentRegion -string 'en_US' " & quotedBuiltAppInfoPlistPath & "
+plutil -replace  CFBundleAllowMixedLocalizations -bool false " & quotedBuiltAppInfoPlistPath & "
 
-plutil -remove NSHomeKitUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSAppleMusicUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSCalendarsUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSSiriUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSCameraUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSMicrophoneUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSAppleEventsUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSRemindersUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSContactsUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSPhotoLibraryUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
-plutil -remove NSSystemAdministrationUsageDescription " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+plutil -remove NSHomeKitUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSAppleMusicUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSCalendarsUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSSiriUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSCameraUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSMicrophoneUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSAppleEventsUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSRemindersUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSContactsUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSPhotoLibraryUsageDescription " & quotedBuiltAppInfoPlistPath & "
+plutil -remove NSSystemAdministrationUsageDescription " & quotedBuiltAppInfoPlistPath & "
 
 mv " & (quoted form of (appBuildPath & "/Contents/MacOS/applet")) & " " & (quoted form of (appBuildPath & "/Contents/MacOS/" & projectName)) & "
-plutil -replace CFBundleExecutable -string " & (quoted form of projectName) & " " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+plutil -replace CFBundleExecutable -string " & (quoted form of projectName) & " " & quotedBuiltAppInfoPlistPath & "
 
 mv " & (quoted form of (appBuildPath & "/Contents/Resources/applet.rsrc")) & " " & (quoted form of (appBuildPath & "/Contents/Resources/" & projectName & ".rsrc")) & "
 
 rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/applet.icns")) & "
-plutil -replace CFBundleIconFile -string " & (quoted form of projectName) & " " & (quoted form of (appBuildPath & "/Contents/Info.plist")) & "
+plutil -replace CFBundleIconFile -string " & (quoted form of projectName) & " " & quotedBuiltAppInfoPlistPath & "
 
 ditto " & (quoted form of (projectFolderPath & projectName & " Resources/")) & " " & (quoted form of (appBuildPath & "/Contents/Resources/")) & "
 rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/.DS_Store")) & "

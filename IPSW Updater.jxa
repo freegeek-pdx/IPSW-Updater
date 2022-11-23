@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2022.11.17-1'
+const appVersion = '2022.11.23-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid()"
@@ -46,11 +46,12 @@ let appPath = ap
 wakeMacUp()
 
 const appName = appBundle.objectForInfoDictionaryKey('CFBundleName').js
+const bundleExecutableName = appBundle.objectForInfoDictionaryKey('CFBundleExecutable').js
 
 // @ts-ignore: JXA-ObjC
 const fileManager = $.NSFileManager.defaultManager
 
-if (!fileManager.fileExistsAtPath(`${appPath}/Contents/MacOS/${appName}`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Scripts/main.scpt`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Launch ${appName}`)) {
+if (!fileManager.fileExistsAtPath(`${appPath}/Contents/MacOS/${bundleExecutableName}`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Scripts/main.scpt`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Launch ${bundleExecutableName}`)) {
 	debugLog('App Check Error', appPath)
 
 	app.activate()
@@ -66,7 +67,7 @@ if (!fileManager.fileExistsAtPath(`${appPath}/Contents/MacOS/${appName}`) || !fi
 }
 
 const bundleIdentifier = appBundle.bundleIdentifier.js
-const intendedBundleIdentifier = `org.freegeek.${appName.replace(/ /g, '-')}`
+const intendedBundleIdentifier = `org.freegeek.${bundleExecutableName.replace(/ /g, '-')}`
 if (bundleIdentifier != intendedBundleIdentifier) {
 	debugLog('Incorrect Bundle Identifier Error', bundleIdentifier)
 
@@ -169,7 +170,7 @@ const temporaryFilesFolder = `${applicationSupportFolder}/Temporary Files`
 // @ts-ignore: JXA-ObjC
 const userTrashPath = fileManager.URLsForDirectoryInDomains($.NSTrashDirectory, $.NSUserDomainMask).firstObject.path.js
 
-const appIsQuarantined = (appPath.includes('/AppTranslocation/') || app.doShellScript(`/usr/bin/xattr '${appPath}'`).includes('com.apple.quarantine'))
+const appIsQuarantined = (appPath.includes('/AppTranslocation/') || app.doShellScript(`/usr/bin/xattr ${quoteForShell(appPath)}`).includes('com.apple.quarantine'))
 
 let appPaths = []
 try { appPaths = app.doShellScript(`/usr/bin/mdfind kMDItemCFBundleIdentifier = ${bundleIdentifier}`).split(/\n|\r/) } catch (ignoredError) { /* Ignore */ }
@@ -182,11 +183,11 @@ if (appPath.includes('/AppTranslocation/')) {
 	for (const thisAppPath of appPaths)
 		try {
 			if (!thisAppPath.includes('/AppTranslocation/')) {
-				let appLastUsedDateString = app.doShellScript(`/usr/bin/mdls -raw -name kMDItemLastUsedDate '${thisAppPath}'`)
+				let appLastUsedDateString = app.doShellScript(`/usr/bin/mdls -raw -name kMDItemLastUsedDate ${quoteForShell(thisAppPath)}`)
 
 				// kMDItemLastUsedDate will be "(null)" if it was never launched (which would happen when launching a quarantined app), so lets check the date added.
 				if (!appLastUsedDateString || (appLastUsedDateString == "(null)"))
-					appLastUsedDateString = app.doShellScript(`/usr/bin/mdls -raw -name kMDItemDateAdded '${thisAppPath}'`)
+					appLastUsedDateString = app.doShellScript(`/usr/bin/mdls -raw -name kMDItemDateAdded ${quoteForShell(thisAppPath)}`)
 
 				const appLastUsedDate = new Date(appLastUsedDateString.slice(0, -6).replace(' ', 'T'))
 
@@ -263,12 +264,12 @@ Would you like ${appName} to move itself to the “Applications” folder?`,
 			// @ts-ignore: JXA-ObjC
 			const appFileName = $(appPath).lastPathComponent.js
 
-			const moveToApplicationsFolderScript = `/usr/bin/osascript -e '
+			const moveToApplicationsFolderScript = `/usr/bin/osascript -e ${quoteForShell(`
 use AppleScript version "2.7"
 use scripting additions
 use framework "Foundation"
 
-set currentAppFilePath to "${appPath}"
+set currentAppFilePath to ${quoteForAppleScript(appPath)}
 
 delay 0.5
 repeat while (application currentAppFilePath is running)
@@ -276,22 +277,22 @@ repeat while (application currentAppFilePath is running)
 end repeat
 ${((appIsQuarantined && (appPaths.length > 0)) ? `
 try
-	do shell script "/usr/bin/xattr -drs com.apple.quarantine \\"${appPaths.join('\\" \\"')}\\""
+	do shell script "/usr/bin/xattr -drs com.apple.quarantine " & ${appPaths.map(thisAppPath => `(quoted form of ${quoteForAppleScript(thisAppPath)})`).join(' & " " & ')}
 end try
 ` : '')}
-set appInTempFolder to "${temporaryFilesFolder}/${appFileName}"
+set appInTempFolder to ${quoteForAppleScript(`${temporaryFilesFolder}/${appFileName}`)}
 
 set systemApplicationsFolder to (POSIX path of (path to applications folder from system domain))
-set appInSystemApplicationsFolder to (systemApplicationsFolder & "${appFileName}")
+set appInSystemApplicationsFolder to (systemApplicationsFolder & ${quoteForAppleScript(appFileName)})
 set actualInstallFilePath to appInSystemApplicationsFolder
 
 set userApplicationsFolder to (POSIX path of (path to applications folder from user domain))
-set appInUserApplicationsFolder to (userApplicationsFolder & "${appFileName}")
+set appInUserApplicationsFolder to (userApplicationsFolder & ${quoteForAppleScript(appFileName)})
 
 set userDownloadsFolder to (POSIX path of (path to downloads folder from user domain))
-set appInUserDownloadsFolder to (userDownloadsFolder & "${appFileName}")
+set appInUserDownloadsFolder to (userDownloadsFolder & ${quoteForAppleScript(appFileName)})
 
-set adminPermissionPrompt to "“${appName}” requires Admin Permission to move itself to the “Applications” folder."
+set adminPermissionPrompt to "“${quoteForAppleScript(appName, true)}” requires Admin Permission to move itself to the “Applications” folder."
 
 try
 	set appOriginalFileStructure to ""
@@ -389,9 +390,9 @@ ${(appIsQuarantined ? `
 on error moveError
 	activate
 	beep
-	display alert "Error Moving “${appName}” to “Applications” Folder" message moveError as critical
+	display alert "Error Moving “${quoteForAppleScript(appName, true)}” to “Applications” Folder" message moveError as critical
 end try
-do shell script "/bin/rm -rf \\"${temporaryFilesFolder}\\""
+do shell script "/bin/rm -rf " & (quoted form of ${quoteForAppleScript(temporaryFilesFolder)})
 try
 	do shell script "/usr/bin/open -na " & (quoted form of actualInstallFilePath)
 on error
@@ -403,14 +404,15 @@ on error
 		on error launchError
 			activate
 			beep
-			display alert "Error Re-Launching “${appName}”\nAfter Moving to “Applications” Folder" message launchError buttons {"Quit", "Re-Download “${appName}”"} cancel button 1 default button 2 as critical
-			do shell script "/usr/bin/open \\"https://ipsw.app/download\\""
+			display alert "Error Re-Launching “${quoteForAppleScript(appName, true)}”\nAfter Moving to “Applications” Folder" message launchError buttons {"Quit", "Re-Download “${quoteForAppleScript(appName, true)}”"} cancel button 1 default button 2 as critical
+			do shell script "/usr/bin/open 'https://ipsw.app/download'"
 		end try
 	end try
 end try
-' > /dev/null 2>&1 &`
+`)} > /dev/null 2>&1 &`
 
-			//debugDialog(moveToApplicationsFolderScript.replace(/\/usr\/bin\/osascript -e '|' > \/dev\/null 2>&1 &/g, ''))
+			//debugDialog(moveToApplicationsFolderScript.replace(/\/usr\/bin\/osascript -e '|' > \/dev\/null 2>&1 &/g, '').replace(/'\\''/g, "'").trim())
+			//debugDialog(app.doShellScript(moveToApplicationsFolderScript.replace('/usr/bin/osascript -e ', "printf '%s' ").replace(' > /dev/null 2>&1 &', '')).trim())
 
 			app.doShellScript(moveToApplicationsFolderScript)
 
@@ -419,22 +421,22 @@ end try
 			setPreference('RefusedMoveToApplications', true, 'bool')
 
 			if (appIsQuarantined && (appPaths.length > 0)) {
-				app.doShellScript(`/usr/bin/osascript -e '
+				app.doShellScript(`/usr/bin/osascript -e ${quoteForShell(`
 delay 0.5
-repeat while (application "${appPath}" is running)
+repeat while (application ${quoteForAppleScript(appPath)} is running)
 	delay 0.5
 end repeat
 try
-	do shell script "/usr/bin/xattr -drs com.apple.quarantine \\"${appPaths.join('\\" \\"')}\\""
+	do shell script "/usr/bin/xattr -drs com.apple.quarantine " & ${appPaths.map(thisAppPath => `(quoted form of ${quoteForAppleScript(thisAppPath)})`).join(' & " " & ')}
 end try
 try
-	do shell script "/usr/bin/open -na \\"${appPath}\\""
+	do shell script "/usr/bin/open -na " & (quoted form of ${quoteForAppleScript(appPath)})
 on error
 	try
 		do shell script "/usr/bin/open -nb ${bundleIdentifier}"
 	end try
 end try
-' > /dev/null 2>&1 &`)
+`)} > /dev/null 2>&1 &`)
 
 				app.quit()
 			}
@@ -450,15 +452,15 @@ end try
 			try { sharedWorkspace.activateFileViewerSelectingURLs($.NSArray.arrayWithObject($.NSURL.fileURLWithPath(appPath))) } catch (ignoredError) { app.beep() }
 
 		if (appIsQuarantined && (appPaths.length > 0))
-			app.doShellScript(`/usr/bin/osascript -e '
+			app.doShellScript(`/usr/bin/osascript -e ${quoteForShell(`
 delay 0.5
-repeat while (application "${appPath}" is running)
+repeat while (application ${quoteForAppleScript(appPath)} is running)
 	delay 0.5
 end repeat
 try
-	do shell script "/usr/bin/xattr -drs com.apple.quarantine \\"${appPaths.join('\\" \\"')}\\""
+	do shell script "/usr/bin/xattr -drs com.apple.quarantine " & ${appPaths.map(thisAppPath => `(quoted form of ${quoteForAppleScript(thisAppPath)})`).join(' & " " & ')}
 end try
-' > /dev/null 2>&1 &`)
+`)} > /dev/null 2>&1 &`)
 
 		if (moveToApplicationsError.message != 'User canceled.')
 			throw moveToApplicationsError
@@ -542,7 +544,7 @@ if (fileManager.fileExistsAtPath(launchAgentPlistPath)) { // Check if a LaunchAg
 			debugLog('Updating Outdated LaunchAgent PLIST')
 
 			try {
-				app.doShellScript(`/bin/launchctl bootout 'gui/${currentUserID}/${bundleIdentifier}'`)
+				app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`)
 			} catch (bootoutLaunchAgentError) {
 				debugLog('Bootout LaunchAgent Error', bootoutLaunchAgentError)
 			}
@@ -557,7 +559,7 @@ if (fileManager.fileExistsAtPath(launchAgentPlistPath)) { // Check if a LaunchAg
 					// @ts-ignore: JXA-ObjC
 					if ($(launchAgentPlistDict).writeToURLError($.NSURL.fileURLWithPath(launchAgentPlistPath), writeLaunchAgentToFileError))
 						try {
-							app.doShellScript(`/bin/launchctl bootstrap 'gui/${currentUserID}' '${launchAgentPlistPath}'`)
+							app.doShellScript(`/bin/launchctl bootstrap ${quoteForShell(`gui/${currentUserID}`)} ${quoteForShell(launchAgentPlistPath)}`)
 						} catch (bootstrapLaunchAgentError) {
 							debugLog('Bootstrap LaunchAgent Error', bootstrapLaunchAgentError)
 						}
@@ -653,13 +655,20 @@ let progressWindow = undefined
 // @ts-ignore: JXA-ObjC
 for (const thisWindow of $.NSApp.windows.js)
 	if (thisWindow.title.js == appName) {
-		progressWindow = thisWindow
-		// @ts-ignore: JXA-ObjC
-		progressWindow.standardWindowButton($.NSWindowZoomButton).enabled = false
-		break
+		for (const thisSubview of thisWindow.contentView.subviews.js)
+			// @ts-ignore: JXA-ObjC
+			if ($.NSStringFromClass(thisSubview.class).js == 'NSProgressIndicator') { // Check for NSProgressIndicator to not accidentally choose the "startup screen" window in case the app was launched when the Control key was being held.
+				progressWindow = thisWindow
+				// @ts-ignore: JXA-ObjC
+				progressWindow.standardWindowButton($.NSWindowZoomButton).enabled = false
+				break
+			}
+
+		if (progressWindow) break
 	}
 
-const appUpdatesJsonURL = `https://ipsw.app/download/updates.php?current_version=${appVersion}&os=${app.systemInfo().systemVersion}&uuid=${uuid}`
+const releaseNotesURL = 'https://ipsw.app/download/updates.php'
+const appUpdatesJsonURL = `${releaseNotesURL}?current_version=${appVersion}&os=${app.systemInfo().systemVersion}&uuid=${uuid}`
 
 if (!justInstalledUpdate && !isFirstRun)
 	checkAndInstallAppUpdates()
@@ -680,7 +689,7 @@ else {
 					// @ts-ignore: JXA-ObjC
 					fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(temporaryFilesFolder, true, {}, $())
 
-				const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -L '${appUpdatesJsonURL}&just_updated=1' -o '${appUpdatesJsonFilePath}' > '${appUpdatesJsonProgressOutputFile}' 2>&1 & echo $!`)
+				const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -L ${quoteForShell(`${appUpdatesJsonURL}&just_updated=1`)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdatesJsonProgressOutputFile)} 2>&1 & echo $!`)
 				curlPIDs.push(downloadAppUpdatesJsonPID)
 
 				try {
@@ -718,18 +727,30 @@ else {
 				closeProgressWindow()
 
 				if (macIsAwakeAndUnlocked()) {
-					app.activate()
-					displayAlertOrDialogDependingOnOS(`Welcome to ${appName} Version ${appVersion}!`,
-						`Version ${appVersion} Release Notes:
+					for ( ; ; ) {
+						app.activate()
+						try {
+							displayAlertOrDialogDependingOnOS(`Welcome to ${appName} Version ${appVersion}!`,
+								`Version ${appVersion} Release Notes:
 
 ${newVersionReleaseNotes}`,
-						`${appName}  —  Updated to ${appVersion}`,
-						'note',
-						['Continue'],
-						null,
-						1,
-						60
-					)
+								`${appName}  —  Updated to ${appVersion}`,
+								'note',
+								['View All Release Notes', 'Continue'],
+								1,
+								2,
+								60
+							)
+
+							break
+						} catch (appUpdatedDialogError) {
+							if (appUpdatedDialogError.message == 'User canceled.')
+								// @ts-ignore: JXA-ObjC
+								sharedWorkspace.openURL($.NSURL.URLWithString(releaseNotesURL))
+							else
+								break
+						}
+					}
 				}
 			} catch (appUpdateError) {
 				closeProgressWindow()
@@ -754,7 +775,7 @@ ${newVersionReleaseNotes}`,
 				// But, even if Mac IS NOT awake and unlocked still do the "curl" call to "appUpdatesJsonURL" with the new version parameters,
 				// (but do not wait for it to finish or save the output) just so that the successful app update is still saved in the server log.
 
-				app.doShellScript(`/usr/bin/curl -m 5 -sL '${appUpdatesJsonURL}&just_updated=2' > /dev/null 2>&1 &`) // "just_updated=2" indicates an update when the Mac is asleep or locked (while "just_updated=1" indicates updated while awake an unlocked).
+				app.doShellScript(`/usr/bin/curl -m 5 -sL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=2`)} > /dev/null 2>&1 &`) // "just_updated=2" indicates an update when the Mac is asleep or locked (while "just_updated=1" indicates updated while awake an unlocked).
 			} catch (ignoredError) { /* Ignore */ }
 	} else {
 		// @ts-ignore: JXA
@@ -1062,7 +1083,7 @@ try {
 
 		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
 
-		const downloadFirmwaresInfoPID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L '${thisFirmwaresInfoURL}' -o '${allFirmwaresFilePath}' > '${firmwareProgressOutputFile}' 2>&1 & echo $!`)
+		const downloadFirmwaresInfoPID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L ${quoteForShell(thisFirmwaresInfoURL)} -o ${quoteForShell(allFirmwaresFilePath)} > ${quoteForShell(firmwareProgressOutputFile)} 2>&1 & echo $!`)
 		curlPIDs.push(downloadFirmwaresInfoPID)
 
 		try {
@@ -1378,7 +1399,7 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 						try {
 							if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
 
-							const downloadFirmwarePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L '${firmwaresNeedingUpdate[thisFirmwareFileName].url}' -o '${downloadFirmwareFilePath}' > '${firmwareProgressOutputFile}' 2>&1 & echo $!`)
+							const downloadFirmwarePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L ${quoteForShell(firmwaresNeedingUpdate[thisFirmwareFileName].url)} -o ${quoteForShell(downloadFirmwareFilePath)} > ${quoteForShell(firmwareProgressOutputFile)} 2>&1 & echo $!`)
 							curlPIDs.push(downloadFirmwarePID)
 							debugLog(`Download ${thisFirmwareFileName} CURL PID`, downloadFirmwarePID)
 
@@ -2130,7 +2151,7 @@ function createVersionsDownloadedSummary(downloadedFiles, indentLevel = 0) {
 	for (const thisVersionsForOS in versionsDownloadedForEachOS) {
 		downloadedVersionsCount += versionsDownloadedForEachOS[thisVersionsForOS].length
 		// @ts-ignore: JXA-ObjC
-		versionsDownloadedForEachOS[thisVersionsForOS].sort((thisVersion, thatVersion) => { return $(thatVersion).compareOptions(thisVersion, $.NSNumericSearch) })
+		versionsDownloadedForEachOS[thisVersionsForOS].sort((thisVersion, thatVersion) => $(thatVersion).compareOptions(thisVersion, $.NSNumericSearch))
 	}
 
 	if (downloadedVersionsCount > 0) {
@@ -2220,7 +2241,7 @@ function calculateChecksumForFile(filePath, algorithm = 1) {
 		let returnChecksum = `SHA${algorithm}SUM-UNKOWN-ERROR`
 		// @ts-ignore: JXA-ObjC
 		const checksumOutputFile = `${temporaryFilesFolder}/${$(filePath).lastPathComponent.js}-checksum`
-		const calculateChecksumPID = app.doShellScript(`/usr/bin/openssl dgst -sha${algorithm} '${filePath}' > '${checksumOutputFile}' 2>&1 & echo $!`)
+		const calculateChecksumPID = app.doShellScript(`/usr/bin/openssl dgst -sha${algorithm} ${quoteForShell(filePath)} > ${quoteForShell(checksumOutputFile)} 2>&1 & echo $!`)
 
 		try {
 			while (app.doShellScript(`/bin/ps -p ${calculateChecksumPID} > /dev/null 2>&1; echo $?`) == 0)
@@ -2370,7 +2391,7 @@ function checkAndInstallAppUpdates() {
 
 		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
 
-		const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -L '${appUpdatesJsonURL}' -o '${appUpdatesJsonFilePath}' > '${appUpdateProgressOutputFile}' 2>&1 & echo $!`)
+		const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -L ${quoteForShell(appUpdatesJsonURL)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
 		curlPIDs.push(downloadAppUpdatesJsonPID)
 
 		try {
@@ -2423,9 +2444,10 @@ function checkAndInstallAppUpdates() {
 				let userClickedInstall = false
 
 				if (macIsAwakeAndUnlocked()) { // If Mac is asleep or locked, the update will be automatically installed without prompting if "autoInstallUpdate" is true.
-					app.activate()
-					const appUpdateAvailableReply = displayAlertOrDialogDependingOnOS(`${appName} Version ${latestAppUpdateInfo.version} is Now Available!`,
-						`Released: ${displayReleaseDate}
+					for ( ; ; ) {
+						app.activate()
+						const appUpdateAvailableReply = displayAlertOrDialogDependingOnOS(`${appName} Version ${latestAppUpdateInfo.version} is Now Available!`,
+							`Released: ${displayReleaseDate}
 
 Version ${latestAppUpdateInfo.version} Release Notes:
 
@@ -2434,16 +2456,23 @@ ${latestAppUpdateInfo.releasenotes ? latestAppUpdateInfo.releasenotes : '	No Rel
 Version ${appVersion} is currently installed.
 In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} will automatically be installed…` :
 'this update will be skipped until the next run…')}`,
-						`${appName}  —  Update Available`,
-						'note',
-						['Update Later', `Update to ${latestAppUpdateInfo.version}`],
-						1,
-						2,
-						60
-					)
+							`${appName}  —  Update Available`,
+							'note',
+							['View All Release Notes', 'Update Later', `Update to ${latestAppUpdateInfo.version}`],
+							2,
+							3,
+							60
+						)
 
-					userClickedInstall = appUpdateAvailableReply.buttonReturned.includes(latestAppUpdateInfo.version)
-					shouldInstallUpdate = (((appUpdateAvailableReply.gaveUp == true) && autoInstallUpdate) || userClickedInstall)
+						if (appUpdateAvailableReply.buttonReturned == 'View All Release Notes') {
+							// @ts-ignore: JXA-ObjC
+							sharedWorkspace.openURL($.NSURL.URLWithString(releaseNotesURL))
+						} else {
+							userClickedInstall = appUpdateAvailableReply.buttonReturned.includes(latestAppUpdateInfo.version)
+							shouldInstallUpdate = (((appUpdateAvailableReply.gaveUp == true) && autoInstallUpdate) || userClickedInstall)
+							break
+						}
+					}
 				}
 
 				if (shouldInstallUpdate) {
@@ -2463,7 +2492,7 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 
 					if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
 
-					const downloadAppUpdatePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L '${latestAppUpdateInfo.url}' -o '${appUpdateZipFilePath}' > '${appUpdateProgressOutputFile}' 2>&1 & echo $!`)
+					const downloadAppUpdatePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L ${quoteForShell(latestAppUpdateInfo.url)} -o ${quoteForShell(appUpdateZipFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
 					curlPIDs.push(downloadAppUpdatePID)
 
 					try {
@@ -2488,7 +2517,7 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 						// @ts-ignore: JXA
 						delay(0.25)
 
-						const appUpdateTempFilePath = app.doShellScript(`/usr/bin/ditto -x -k -V --noqtn '${appUpdateZipFilePath}' '${temporaryFilesFolder}' 2>&1`).match(/copying file (.+?)\.app\/Contents\/Info\.plist \.\.\. /)[0].replace('copying file ', `${temporaryFilesFolder}/`).replace('/Contents/Info.plist ... ', '')
+						const appUpdateTempFilePath = app.doShellScript(`/usr/bin/ditto -x -k -V --noqtn ${quoteForShell(appUpdateZipFilePath)} ${quoteForShell(temporaryFilesFolder)} 2>&1`).match(/copying file (.+?)\.app\/Contents\/Info\.plist \.\.\. /)[0].replace('copying file ', `${temporaryFilesFolder}/`).replace('/Contents/Info.plist ... ', '')
 
 						if (fileManager.fileExistsAtPath(appUpdateTempFilePath)) {
 							setPreference('AppJustAutoUpdated', true, 'bool')
@@ -2513,33 +2542,33 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 							// @ts-ignore: JXA-ObjC
 							const updatedAppFileName = `${$(appUpdateTempFilePath).lastPathComponent.js}`
 
-							const installAppUpdateScript = `/usr/bin/osascript -e '
+							const installAppUpdateScript = `/usr/bin/osascript -e ${quoteForShell(`
 use AppleScript version "2.7"
 use scripting additions
 use framework "Foundation"
 
-set currentAppFilePath to "${appPath}"
+set currentAppFilePath to ${quoteForAppleScript(appPath)}
 
 delay 0.5
 repeat while (application currentAppFilePath is running)
 	delay 0.5
 end repeat
 
-set versionedAppFilePath to "${parentDirectoryToMe}/${appName} (${appVersion}).app"
-set appUpdateTempFilePath to "${appUpdateTempFilePath}"
-set appInstallFilePath to "${parentDirectoryToMe}/${updatedAppFileName}"
+set versionedAppFilePath to ${quoteForAppleScript(`${parentDirectoryToMe}/${appName} (${appVersion}).app`)}
+set appUpdateTempFilePath to ${quoteForAppleScript(appUpdateTempFilePath)}
+set appInstallFilePath to ${quoteForAppleScript(`${parentDirectoryToMe}/${updatedAppFileName}`)}
 set actualInstallFilePath to appInstallFilePath
 
 set systemApplicationsFolder to (POSIX path of (path to applications folder from system domain))
-set appInSystemApplicationsFolder to (systemApplicationsFolder & "${updatedAppFileName}")
+set appInSystemApplicationsFolder to (systemApplicationsFolder & ${quoteForAppleScript(updatedAppFileName)})
 
 set userApplicationsFolder to (POSIX path of (path to applications folder from user domain))
-set appInUserApplicationsFolder to (userApplicationsFolder & "${updatedAppFileName}")
+set appInUserApplicationsFolder to (userApplicationsFolder & ${quoteForAppleScript(updatedAppFileName)})
 
 set userDownloadsFolder to (POSIX path of (path to downloads folder from user domain))
-set appInUserDownloadsFolder to (userDownloadsFolder & "${updatedAppFileName}")
+set appInUserDownloadsFolder to (userDownloadsFolder & ${quoteForAppleScript(updatedAppFileName)})
 
-set adminPermissionPrompt to "“${appName}” requires Admin Permission to update itself to version ${latestAppUpdateInfo.version}."
+set adminPermissionPrompt to "“${quoteForAppleScript(appName, true)}” requires Admin Permission to update itself to version ${quoteForAppleScript(latestAppUpdateInfo.version, true)}."
 
 try
 	set fileManager to (defaultManager of NSFileManager of current application)
@@ -2626,7 +2655,7 @@ ${((userClickedInstall || globalApplicationsFolderIsWritable) ? `
 		set actualInstallFilePath to appInUserDownloadsFolder
 	end if
 
-	setBool_forKey_(false, "AppUpdateAvailable") of initWithSuiteName_("${bundleIdentifier}") of alloc of NSUserDefaults of current application
+	setBool_forKey_(false, "AppUpdateAvailable") of initWithSuiteName_(${quoteForAppleScript(bundleIdentifier)}) of alloc of NSUserDefaults of current application
 
 	if (fileExistsAtPath_(actualInstallFilePath) of fileManager) then
 		-- When working auto-updating for MacLand Scripts, Catalina seems to fail to launch if done too quickly after a move (with an "executable not found" error).
@@ -2652,14 +2681,14 @@ ${((userClickedInstall || globalApplicationsFolderIsWritable) ? `
 on error installError
 	activate
 	beep
-	display alert "Error Installing “${appName}” After Update" message installError as critical
+	display alert "Error Installing “${quoteForAppleScript(appName, true)}” After Update" message installError as critical
 end try
 
 try
 	do shell script "/usr/bin/open -na " & (quoted form of actualInstallFilePath)
 on error
 	try
-		do shell script "/usr/bin/open -na \\"${parentDirectoryToMe}/${appName}.app\\""
+		do shell script "/usr/bin/open -na " & (quoted form of ${quoteForAppleScript(`${parentDirectoryToMe}/${appName}.app`)})
 	on error
 		try
 			do shell script "/usr/bin/open -na " & (quoted form of currentAppFilePath)
@@ -2669,15 +2698,16 @@ on error
 			on error launchError
 				activate
 				beep
-				display alert "Error Launching “${appName}” After Update" message launchError buttons {"Quit", "Re-Download “${appName}”"} cancel button 1 default button 2 as critical
-				do shell script "/usr/bin/open \\"https://ipsw.app/download\\""
+				display alert "Error Launching “${quoteForAppleScript(appName, true)}” After Update" message launchError buttons {"Quit", "Re-Download “${quoteForAppleScript(appName, true)}”"} cancel button 1 default button 2 as critical
+				do shell script "/usr/bin/open 'https://ipsw.app/download'"
 			end try
 		end try
 	end try
 end try
-' > /dev/null 2>&1 &`
+`)} > /dev/null 2>&1 &`
 
-							//debugDialog(installAppUpdateScript.replace(/\/usr\/bin\/osascript -e '|' > \/dev\/null 2>&1 &/g, ''))
+							//debugDialog(installAppUpdateScript.replace(/\/usr\/bin\/osascript -e '|' > \/dev\/null 2>&1 &/g, '').replace(/'\\''/g, "'").trim())
+							//debugDialog(app.doShellScript(installAppUpdateScript.replace('/usr/bin/osascript -e ', "printf '%s' ").replace(' > /dev/null 2>&1 &', '')).trim())
 
 							app.doShellScript(installAppUpdateScript)
 
@@ -3069,7 +3099,7 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 
 			if (needsToWriteLaunchAgentPlistFile) {
 				try {
-					app.doShellScript(`/bin/launchctl bootout 'gui/${currentUserID}/${bundleIdentifier}'`)
+					app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`)
 				} catch (bootoutLaunchAgentError) {
 					debugLog('Bootout LaunchAgent Error', bootoutLaunchAgentError)
 				}
@@ -3086,7 +3116,7 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 				// @ts-ignore: JXA-ObjC
 				if ($(launchAgentDict).writeToURLError($.NSURL.fileURLWithPath(launchAgentPlistPath), writeLaunchAgentToFileError))
 					try {
-						app.doShellScript(`/bin/launchctl bootstrap 'gui/${currentUserID}' '${launchAgentPlistPath}'`)
+						app.doShellScript(`/bin/launchctl bootstrap ${quoteForShell(`gui/${currentUserID}`)} ${quoteForShell(launchAgentPlistPath)}`)
 					} catch (bootstrapLaunchAgentError) {
 						debugLog('Bootstrap LaunchAgent Error', bootstrapLaunchAgentError)
 					}
@@ -3496,7 +3526,7 @@ ${JSON.stringify(removeConflictingPowerScheduleError, Object.getOwnPropertyNames
 			)
 		}
 	} else {
-		try { app.doShellScript(`/bin/launchctl bootout 'gui/${currentUserID}/${bundleIdentifier}'`) } catch (ignoredError) { /* Ignore */ }
+		try { app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`) } catch (ignoredError) { /* Ignore */ }
 
 		// @ts-ignore: JXA-ObjC
 		try { fileManager.removeItemAtPathError(launchAgentPlistPath, $()) } catch (ignoredError) { /* Ignore */ }
@@ -3837,6 +3867,16 @@ function revealPowerScheduleInSystemPreferences() {
 	}
 }
 
+function quoteForShell(unquotedString, onlyEscape = false) {
+	const escapedString = unquotedString.replace(/'/g, "'\\''")
+	return (onlyEscape ? escapedString : `'${escapedString}'`)
+}
+
+function quoteForAppleScript(unquotedString, onlyEscape = false) {
+	const escapedString = unquotedString.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+	return (onlyEscape ? escapedString : `"${escapedString}"`)
+}
+
 function getPreference(key, intendedType = 'string', isReattempt = false) {
 	let returnPreferenceValue = undefined
 
@@ -3995,15 +4035,15 @@ function cleanUpBeforeQuitting() {
 		try { appPaths = app.doShellScript(`/usr/bin/mdfind kMDItemCFBundleIdentifier = ${bundleIdentifier}`).split(/\n|\r/) } catch (ignoredError) { /* Ignore */ }
 
 		if (appPaths.length > 0)
-			app.doShellScript(`/usr/bin/osascript -e '
+			app.doShellScript(`/usr/bin/osascript -e ${quoteForShell(`
 delay 0.5
-repeat while (application "${appPath}" is running)
+repeat while (application ${quoteForAppleScript(appPath)} is running)
 	delay 0.5
 end repeat
 try
-	do shell script "/usr/bin/xattr -drs com.apple.quarantine \\"${appPaths.join('\\" \\"')}\\""
+	do shell script "/usr/bin/xattr -drs com.apple.quarantine " & ${appPaths.map(thisAppPath => `(quoted form of ${quoteForAppleScript(thisAppPath)})`).join(' & " " & ')}
 end try
-' > /dev/null 2>&1 &`)
+`)} > /dev/null 2>&1 &`)
 	}
 
 	// @ts-ignore: JXA-ObjC
