@@ -32,15 +32,15 @@ try
 	((infoPlistPath as POSIX file) as alias)
 	
 	set AppleScript's text item delimiters to "-"
-	set correctBundleIdentifier to bundleIdentifierPrefix & ((words of (name of me)) as string)
+	set correctBundleIdentifier to bundleIdentifierPrefix & ((words of (name of me)) as text)
 	try
-		set currentBundleIdentifier to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' " & (quoted form of infoPlistPath)) as string)
+		set currentBundleIdentifier to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' " & (quoted form of infoPlistPath)) as text)
 		if (currentBundleIdentifier is not equal to correctBundleIdentifier) then error "INCORRECT Bundle Identifier"
 	on error
 		do shell script "plutil -replace CFBundleIdentifier -string " & (quoted form of correctBundleIdentifier) & " " & (quoted form of infoPlistPath)
 		
 		try
-			set currentCopyright to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :NSHumanReadableCopyright' " & (quoted form of infoPlistPath)) as string)
+			set currentCopyright to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :NSHumanReadableCopyright' " & (quoted form of infoPlistPath)) as text)
 			if (currentCopyright does not contain "Twemoji") then error "INCORRECT Copyright"
 		on error
 			do shell script "plutil -replace NSHumanReadableCopyright -string " & (quoted form of ("Copyright © " & (year of (current date)) & " Free Geek
@@ -48,7 +48,7 @@ Designed and Developed by Pico Mitchell")) & " " & (quoted form of infoPlistPath
 		end try
 		
 		try
-			set minSystemVersion to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' " & (quoted form of infoPlistPath)) as string)
+			set minSystemVersion to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' " & (quoted form of infoPlistPath)) as text)
 			if (minSystemVersion is not equal to "10.13") then error "INCORRECT Minimum System Version"
 		on error
 			do shell script "plutil -remove LSMinimumSystemVersionByArchitecture " & (quoted form of infoPlistPath) & "; plutil -replace LSMinimumSystemVersion -string '10.13' " & (quoted form of infoPlistPath)
@@ -69,14 +69,14 @@ Designed and Developed by Pico Mitchell")) & " " & (quoted form of infoPlistPath
 		end try
 		
 		try
-			set currentAppleEventsUsageDescription to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :NSAppleEventsUsageDescription' " & (quoted form of infoPlistPath)) as string)
+			set currentAppleEventsUsageDescription to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :NSAppleEventsUsageDescription' " & (quoted form of infoPlistPath)) as text)
 			if (currentAppleEventsUsageDescription does not contain (name of me)) then error "INCORRECT AppleEvents Usage Description"
 		on error
 			do shell script "plutil -replace NSAppleEventsUsageDescription -string " & (quoted form of ("You MUST click the “OK” button for “" & (name of me) & "” to be able to function.")) & " " & (quoted form of infoPlistPath)
 		end try
 		
 		try
-			set currentVersion to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' " & (quoted form of infoPlistPath)) as string)
+			set currentVersion to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' " & (quoted form of infoPlistPath)) as text)
 			if (currentVersion is equal to "1.0") then error "INCORRECT Version"
 		on error
 			set shortCreationDateString to (short date string of (creation date of pathToMeInfo))
@@ -85,6 +85,7 @@ Designed and Developed by Pico Mitchell")) & " " & (quoted form of infoPlistPath
 			do shell script "plutil -remove CFBundleVersion " & (quoted form of infoPlistPath) & "; plutil -replace CFBundleShortVersionString -string " & (quoted form of correctVersion) & " " & (quoted form of infoPlistPath)
 		end try
 		
+		-- The "main.scpt" must NOT be writable to prevent the code signature from being invalidated: https://developer.apple.com/library/archive/releasenotes/AppleScript/RN-AppleScript/RN-10_8/RN-10_8.html#//apple_ref/doc/uid/TP40000982-CH108-SW8
 		do shell script "osascript -e 'delay 0.5' -e 'repeat while (application \"" & (POSIX path of (path to me)) & "\" is running)' -e 'delay 0.5' -e 'end repeat' -e 'try' -e 'do shell script \"chmod a-w \\\"" & ((POSIX path of (path to me)) & "Contents/Resources/Scripts/main.scpt") & "\\\"\"' -e 'do shell script \"codesign -fs \\\"Developer ID Application\\\" --strict \\\"" & (POSIX path of (path to me)) & "\\\"\"' -e 'on error codeSignError' -e 'activate' -e 'display alert \"Code Sign Error\" message codeSignError' -e 'end try' -e 'do shell script \"open -na \\\"" & (POSIX path of (path to me)) & "\\\"\"' > /dev/null 2>&1 &"
 		quit
 		delay 10
@@ -95,14 +96,14 @@ set builderFileName to (displayed name of pathToMeInfo)
 if (builderFileName contains ".") then -- "displayed name" could still contain extension that we need to remove if Finder settings are set to include them.
 	set builderFileNameExtension to ("." & (name extension of pathToMeInfo))
 	set AppleScript's text item delimiters to builderFileNameExtension
-	set builderFileName to ((first text item of builderFileName) as string)
+	set builderFileName to ((first text item of builderFileName) as text)
 end if
 
 set AppleScript's text item delimiters to "Build "
-set projectName to ((last text item of builderFileName) as string)
+set projectName to ((last text item of builderFileName) as text)
 
 set AppleScript's text item delimiters to "-"
-set projectNameForBundleID to ((words of projectName) as string)
+set projectNameForBundleID to ((words of projectName) as text)
 
 set projectFolderPath to (POSIX path of (((path to me) as text) & "::")) -- https://apple.stackexchange.com/a/302397
 
@@ -237,14 +238,17 @@ Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is 
 				"eval(s);" & ¬
 				"}else a.doShellScript('/usr/bin/open -nb " & bundleIdentifierPrefix & projectNameForBundleID & "')" & ¬
 				"}catch(e){" & ¬
-				"if(e.message!='User canceled.'){" & ¬
+				"if(e.errorNumber!==-128){" & ¬
 				"delay(0.5);" & ¬
 				"a.activate();" & ¬
 				"try{" & ¬
-				"a.displayAlert(`" & projectName & ": ${((!s)?'Source Not Decoded/Decompressed':((s.length==" & jxaMinifiedSourceLength & ")?'Runtime Error':s.substring(0,100)))}`,{message:`${e}\\n\\n${JSON.stringify(e,Object.getOwnPropertyNames(e))}`,as:'critical',buttons:['Re-Download “" & projectName & "”','Quit'],cancelButton:1,defaultButton:2})" & ¬
-				"}catch(e){a.doShellScript('/usr/bin/open https://ipsw.app/download/')}}}"))
+				"a.displayAlert(`" & projectName & ": ${((!s)?'Source Not Decoded/Decompressed':((s.length==" & jxaMinifiedSourceLength & ")?'Runtime Error':s.substring(0,100)))}`,{message:`${e}\\n\\n${JSON.stringify(e,Object.getOwnPropertyNames(e))}`,as:'critical',buttons:['Quit','Re-Download “" & projectName & "”'],cancelButton:1,defaultButton:2});" & ¬
+				"a.doShellScript('/usr/bin/open https://ipsw.app/download/')" & ¬
+				"}catch(e){}}}"))
 			
 			set quotedBuiltAppInfoPlistPath to (quoted form of (appBuildPath & "/Contents/Info.plist"))
+			-- The "main.scpt" for normal AppleScript applets must NOT be writable to prevent the code signature from being invalidated: https://developer.apple.com/library/archive/releasenotes/AppleScript/RN-AppleScript/RN-10_8/RN-10_8.html#//apple_ref/doc/uid/TP40000982-CH108-SW8
+			-- I don't think that applies to JXA applets since they do not write back properties to the script file, but still doesn't hurt to set it as not writable. 
 			do shell script ("
 chmod a-w " & (quoted form of (appBuildPath & "/Contents/Resources/Scripts/main.scpt")) & "
 
@@ -259,7 +263,7 @@ plutil -replace LSMultipleInstancesProhibited -bool true " & quotedBuiltAppInfoP
 plutil -replace NSHumanReadableCopyright -string " & (quoted form of ("Copyright © " & (year of (current date)) & " Free Geek
 Designed and Developed by Pico Mitchell")) & " " & quotedBuiltAppInfoPlistPath & "
 
-# Very important to force English to catch 'User canceled.' properly and other things.
+# Force English to be able to remove menu items by their English titles (and no text within the app is localized anyways).
 plutil -replace CFBundleDevelopmentRegion -string 'en_US' " & quotedBuiltAppInfoPlistPath & "
 plutil -replace  CFBundleAllowMixedLocalizations -bool false " & quotedBuiltAppInfoPlistPath & "
 
@@ -304,51 +308,54 @@ echo '#!/bin/sh
 chmod +x " & (quoted form of (appBuildPath & "/Contents/Resources/Launch " & projectName)) & "
 codesign -s 'Developer ID Application' --identifier " & (quoted form of (bundleIdentifierPrefix & "Launch-" & projectNameForBundleID)) & " --strict " & (quoted form of (appBuildPath & "/Contents/Resources/Launch " & projectName)))
 			
-			if (appVersion does not end with "-0") then
-				repeat while (application appBuildPath is running)
-					delay 0.5
-				end repeat
+			try
+				do shell script ("codesign -fs 'Developer ID Application' --strict " & (quoted form of appBuildPath)) -- Code signing will be re-done (with hardened runtime) if notarization is done below, but always run "codesign" here in case NOT notarizing during testing so the app can properly launch and validate the code signature.
 				
-				try
-					waitUntilAwakeAndUnlocked()
-					activate
-					display alert ("Notarize " & projectName & " version " & appVersion & "?") buttons {"No", "Yes"} cancel button 1 default button 2
-					delay 0.2 -- Delay a moment to allow the prompt to close.
+				if (appVersion does not end with "-0") then
+					repeat while (application appBuildPath is running)
+						delay 0.5
+					end repeat
 					
 					try
-						set AppleScript's text item delimiters to ""
-						set appZipName to (((words of projectName) as string) & "-v")
-						set AppleScript's text item delimiters to {".", "-"}
-						if ((count of (every text item of appVersion)) is equal to 4) then
-							set appZipName to (appZipName & ((text item 1 of appVersion) as string))
-							if ((length of ((text item 2 of appVersion) as string)) < 2) then
-								set appZipName to (appZipName & "0" & ((text item 2 of appVersion) as string))
+						waitUntilAwakeAndUnlocked()
+						activate
+						display alert ("Notarize " & projectName & " version " & appVersion & "?") buttons {"No", "Yes"} cancel button 1 default button 2
+						delay 0.2 -- Delay a moment to allow the prompt to close.
+						
+						try
+							set AppleScript's text item delimiters to ""
+							set appZipName to (((words of projectName) as text) & "-v")
+							set AppleScript's text item delimiters to {".", "-"}
+							if ((count of (every text item of appVersion)) is equal to 4) then
+								set appZipName to (appZipName & ((text item 1 of appVersion) as text))
+								if ((length of ((text item 2 of appVersion) as text)) < 2) then
+									set appZipName to (appZipName & "0" & ((text item 2 of appVersion) as text))
+								else
+									set appZipName to (appZipName & ((text item 2 of appVersion) as text))
+								end if
+								if ((length of ((text item 3 of appVersion) as text)) < 2) then
+									set appZipName to (appZipName & "0" & ((text item 3 of appVersion) as text))
+								else
+									set appZipName to (appZipName & ((text item 3 of appVersion) as text))
+								end if
+								set appZipName to (appZipName & ((text item 4 of appVersion) as text))
 							else
-								set appZipName to (appZipName & ((text item 2 of appVersion) as string))
+								set appZipName to (appZipName & appVersion)
 							end if
-							if ((length of ((text item 3 of appVersion) as string)) < 2) then
-								set appZipName to (appZipName & "0" & ((text item 3 of appVersion) as string))
-							else
-								set appZipName to (appZipName & ((text item 3 of appVersion) as string))
-							end if
-							set appZipName to (appZipName & ((text item 4 of appVersion) as string))
-						else
-							set appZipName to (appZipName & appVersion)
-						end if
-						
-						set appZipPathForNotarization to (projectFolderPath & "Build/" & appZipName & "-NOTARIZATION-SUBMISSION.zip")
-						set appZipPath to (projectFolderPath & "Build/" & appZipName & ".zip")
-						
-						-- Setting up "notarytool": https://scriptingosx.com/2021/07/notarize-a-command-line-tool-with-notarytool/ & https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow
-						
-						-- NOTE: Every command is chained with "&&" so that if anything errors, it all stops and all combined output from every command will be included in the error message.
-						-- Also, the output of "spctl --assess" is checked for "source=Notarized Developer ID" since a signed but unnotarized app could pass the initial assessment (but stapling should have failed before getting the that check anyways).
-						set notarizationOutput to (do shell script ("rm -f " & (quoted form of appZipPathForNotarization) & " " & (quoted form of appZipPath) & " && \\
+							
+							set appZipPathForNotarization to (projectFolderPath & "Build/" & appZipName & "-NOTARIZATION-SUBMISSION.zip")
+							set appZipPath to (projectFolderPath & "Build/" & appZipName & ".zip")
+							
+							-- Setting up "notarytool": https://scriptingosx.com/2021/07/notarize-a-command-line-tool-with-notarytool/ & https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow
+							
+							-- NOTE: Every command is chained with "&&" so that if anything errors, it all stops and all combined output from every command will be included in the error message.
+							-- Also, the output of "spctl -avv" is checked for "source=Notarized Developer ID" since a signed but unnotarized app could pass the initial assessment (but stapling should have failed before getting the that check anyways).
+							set notarizationOutput to (do shell script ("rm -f " & (quoted form of appZipPathForNotarization) & " " & (quoted form of appZipPath) & " && \\
 echo 'Code Signing App...' && \\
 codesign -fs 'Developer ID Application' -o runtime --strict " & (quoted form of appBuildPath) & " 2>&1 && \\
 echo '
 Zipping App for Notarization...' && \\
-ditto -c -k --keepParent " & (quoted form of appBuildPath) & " " & (quoted form of appZipPathForNotarization) & " 2>&1 && \\
+ditto -ck --keepParent " & (quoted form of appBuildPath) & " " & (quoted form of appZipPathForNotarization) & " 2>&1 && \\
 echo '
 Notarizing App...' && \\
 xcrun notarytool submit " & (quoted form of appZipPathForNotarization) & " --keychain-profile 'notarytool App Specific Password' --wait 2>&1 && \\
@@ -358,64 +365,62 @@ Stapling Notarization Ticket to App...' && \\
 xcrun stapler staple " & (quoted form of appBuildPath) & " 2>&1 && \\
 echo '
 Assessing Notarized App...' && \\
-spctl_assess_output=\"$(spctl --assess -vvv --type execute " & (quoted form of appBuildPath) & " 2>&1)\" && \\
+spctl_assess_output=\"$(spctl -avv " & (quoted form of appBuildPath) & " 2>&1)\" && \\
 echo \"${spctl_assess_output}\" && \\
+codesign -vv " & (quoted form of appBuildPath) & " 2>&1 && \\
 echo \"${spctl_assess_output}\" | grep -qxF 'source=Notarized Developer ID' && \\
 echo '
 Zipping Notarized App...' && \\
-ditto -c -k --keepParent --sequesterRsrc --zlibCompressionLevel 9 " & (quoted form of appBuildPath) & " " & (quoted form of appZipPath) & " 2>&1") without altering line endings) -- VERY IMPORTANT to NOT alter line endings so that "awk" can read each line (which needs "\n" instead of "\r").
-						
-						set notarizationLog to ""
-						try
-							set notarizationSubmissionID to (do shell script ("echo " & (quoted form of notarizationOutput) & " | awk '($1 == \"id:\") { print $NF; exit }'"))
-							if (notarizationSubmissionID is not equal to "") then
-								set notarizationLog to ("
+ditto -ck --keepParent --sequesterRsrc --zlibCompressionLevel 9 " & (quoted form of appBuildPath) & " " & (quoted form of appZipPath) & " 2>&1") without altering line endings) -- VERY IMPORTANT to NOT alter line endings so that "awk" can read each line (which needs "\n" instead of "\r").
+							
+							set notarizationLog to ""
+							try
+								set notarizationSubmissionID to (do shell script ("echo " & (quoted form of notarizationOutput) & " | awk '($1 == \"id:\") { print $NF; exit }'"))
+								if (notarizationSubmissionID is not equal to "") then
+									set notarizationLog to ("
 
 Notarization Log:
 " & (do shell script ("xcrun notarytool log " & notarizationSubmissionID & " --keychain-profile 'notarytool App Specific Password' 2>&1")))
-							end if
-						end try
-						
-						set appZipChecksum to "UNKNOWN"
-						try
-							set appZipChecksum to (last word of (do shell script "openssl dgst -sha512 " & (quoted form of appZipPath)))
-							set the clipboard to appZipChecksum
-						end try
-						
-						waitUntilAwakeAndUnlocked()
-						activate
-						display alert ("Successfully Notarized & Zipped
+								end if
+							end try
+							
+							set appZipChecksum to "UNKNOWN"
+							try
+								set appZipChecksum to (last word of (do shell script "openssl dgst -sha512 " & (quoted form of appZipPath)))
+								set the clipboard to appZipChecksum
+							end try
+							
+							waitUntilAwakeAndUnlocked()
+							activate
+							display alert ("Successfully Notarized & Zipped
 " & projectName & " version " & appVersion & "!") message "Copied SHA512 Checksum of Zipped File (" & appZipChecksum & ") to Clipboard" & notarizationLog
-						
-						try
-							do shell script ("open -R " & (quoted form of appZipPath))
-						end try
-					on error notarizationError number notarizationErrorCode
-						set notarizationLog to ""
-						try
-							set notarizationSubmissionID to (do shell script ("echo " & (quoted form of notarizationError) & " | awk '($1 == \"id:\") { print $NF; exit }'"))
-							if (notarizationSubmissionID is not equal to "") then
-								set notarizationLog to ("
+							
+							try
+								do shell script ("open -R " & (quoted form of appZipPath))
+							end try
+						on error notarizationError number notarizationErrorCode
+							set notarizationLog to ""
+							try
+								set notarizationSubmissionID to (do shell script ("echo " & (quoted form of notarizationError) & " | awk '($1 == \"id:\") { print $NF; exit }'"))
+								if (notarizationSubmissionID is not equal to "") then
+									set notarizationLog to ("
 
 Notarization Log:
 " & (do shell script ("xcrun notarytool log " & notarizationSubmissionID & " --keychain-profile 'notarytool App Specific Password' 2>&1")))
-							end if
+								end if
+							end try
+							
+							waitUntilAwakeAndUnlocked()
+							activate
+							display alert (projectName & " Notarization Error " & notarizationErrorCode) message (notarizationError & notarizationLog)
 						end try
-						
-						waitUntilAwakeAndUnlocked()
-						activate
-						display alert (projectName & " Notarization Error " & notarizationErrorCode) message (notarizationError & notarizationLog)
 					end try
-				on error
-					try
-						do shell script ("codesign -fs 'Developer ID Application' --strict " & (quoted form of appBuildPath))
-					on error codeSignError number codeSignErrorCode
-						waitUntilAwakeAndUnlocked()
-						activate
-						display alert (projectName & " Code Sign Error " & codeSignErrorCode) message codeSignError
-					end try
-				end try
-			end if
+				end if
+			on error codeSignError number codeSignErrorCode
+				waitUntilAwakeAndUnlocked()
+				activate
+				display alert (projectName & " Code Sign Error " & codeSignErrorCode) message codeSignError
+			end try
 		end if
 		
 		try

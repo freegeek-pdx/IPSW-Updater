@@ -28,10 +28,12 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2022.11.23-1'
+const appVersion = '2022.12.14-1'
 
 // @ts-ignore: JXA-ObjC
-ObjC.import('unistd') // For "getuid()"
+ObjC.import('unistd') // For "getuid" function.
+// @ts-ignore: JXA-ObjC
+ObjC.import('Security') // For "SecStaticCodeCheckValidity" and other functions for code signature validation.
 
 // @ts-ignore: JXA-ObjC
 ObjC.bindFunction('CFMakeCollectable', ['id', ['void *']]) // See https://github.com/JXA-Cookbook/JXA-Cookbook/issues/13#issuecomment-174820487 for info about "CFMakeCollectable" (and also the "cfRefToNSObjectIfNeeded" function below).
@@ -54,15 +56,23 @@ const fileManager = $.NSFileManager.defaultManager
 if (!fileManager.fileExistsAtPath(`${appPath}/Contents/MacOS/${bundleExecutableName}`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Scripts/main.scpt`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Launch ${bundleExecutableName}`)) {
 	debugLog('App Check Error', appPath)
 
-	app.activate()
-	app.displayAlert(`${appName}: App Check Error`,
-		{
-			message: `${appName} must be run as an application.`,
-			as: 'critical',
-			buttons: ['OK'],
-			defaultButton: 1
-		}
-	)
+	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
+		try {
+			app.activate()
+			app.displayAlert(`${appName}: App Check Error`,
+				{
+					message: `${appName} must be run as an application.`,
+					as: 'critical',
+					buttons: ['Quit', `Re-Download “${appName}”`],
+					cancelButton: 1,
+					defaultButton: 2
+				}
+			)
+
+			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+		} catch (ignoredError) { /* Ignore */ }
+	}
+
 	app.quit()
 }
 
@@ -71,26 +81,92 @@ const intendedBundleIdentifier = `org.freegeek.${bundleExecutableName.replace(/ 
 if (bundleIdentifier != intendedBundleIdentifier) {
 	debugLog('Incorrect Bundle Identifier Error', bundleIdentifier)
 
-	app.activate()
-	app.displayAlert(`${appName}: Bundle Identifier Error`,
-		{
-			message: `${bundleIdentifier}
-IS NOT EQUAL TO:
-${intendedBundleIdentifier}`,
-			as: 'critical',
-			buttons: ['OK'],
-			defaultButton: 1
-		}
-	)
+	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
+		try {
+			app.activate()
+			app.displayAlert(`${appName}: Bundle Identifier Error`,
+				{
+					message: `Intended Bundle Identifier:
+${intendedBundleIdentifier}
+
+Actual Bundle Identifier:
+${bundleIdentifier}`,
+					as: 'critical',
+					buttons: ['Quit', `Re-Download “${appName}”`],
+					cancelButton: 1,
+					defaultButton: 2
+				}
+			)
+
+			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+		} catch (ignoredError) { /* Ignore */ }
+	}
+
+	app.quit()
+}
+
+const infoDictVersion = appBundle.objectForInfoDictionaryKey('CFBundleShortVersionString').js
+if (infoDictVersion != appVersion) {
+	debugLog(`Incorrect App Version Error: ${infoDictVersion} != ${appVersion}`)
+
+	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
+		try {
+			app.activate()
+			app.displayAlert(`${appName}: App Version Error`,
+				{
+					message: `Intended App Version:
+${appVersion}
+
+Actual App Version:
+${infoDictVersion}`,
+					as: 'critical',
+					buttons: ['Quit', `Re-Download “${appName}”`],
+					cancelButton: 1,
+					defaultButton: 2
+				}
+			)
+
+			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+		} catch (ignoredError) { /* Ignore */ }
+	}
+
 	app.quit()
 }
 
 // @ts-ignore: JXA-ObjC
 const processInfo = $.NSProcessInfo.processInfo
+const isMojaveOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 10, minorVersion: 14, patchVersion: 0})
 const isCatalinaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 10, minorVersion: 15, patchVersion: 0})
 const isBigSurOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 11, minorVersion: 0, patchVersion: 0})
 const isMontereyOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 12, minorVersion: 0, patchVersion: 0})
 const isVenturaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 13, minorVersion: 0, patchVersion: 0})
+
+try {
+	// IMPORTANT: On each launch, confirm the running app is properly signed (and notarized, when possible on macOS 10.14 Mojave and newer).
+	// See comments in the "validateCodeSignatureForAppAtPath" function for more information.
+	validateCodeSignatureForAppAtPath(appPath) // NOTE: This function with "throw" an error if validation fails which will be caught and displayed below.
+} catch (codeSignatureValidationError) {
+	debugLog('Code Signature Error', codeSignatureValidationError)
+
+	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
+		try {
+			app.activate()
+			app.displayAlert(`${appName}: Code Signature Error`,
+				{
+					message: codeSignatureValidationError.message,
+					as: 'critical',
+					buttons: ['Quit', `Re-Download “${appName}”`],
+					cancelButton: 1,
+					defaultButton: 2
+				}
+			)
+
+			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+		} catch (ignoredError) { /* Ignore */ }
+	}
+
+	app.quit()
+}
 
 if (isVenturaOrNewer) {
 	// @ts-ignore: JXA-ObjC
@@ -405,7 +481,7 @@ on error
 			activate
 			beep
 			display alert "Error Re-Launching “${quoteForAppleScript(appName, true)}”\nAfter Moving to “Applications” Folder" message launchError buttons {"Quit", "Re-Download “${quoteForAppleScript(appName, true)}”"} cancel button 1 default button 2 as critical
-			do shell script "/usr/bin/open 'https://ipsw.app/download'"
+			do shell script "/usr/bin/open 'https://ipsw.app/download/'"
 		end try
 	end try
 end try
@@ -442,7 +518,7 @@ end try
 			}
 		}
 	} catch (moveToApplicationsError) {
-		if (moveToApplicationsError.message != 'User canceled.')
+		if (moveToApplicationsError.errorNumber !== -128)
 			debugLog('Move to Applications Folder Error', moveToApplicationsError)
 
 		if (appPath.includes('/AppTranslocation/'))
@@ -462,7 +538,7 @@ try
 end try
 `)} > /dev/null 2>&1 &`)
 
-		if (moveToApplicationsError.message != 'User canceled.')
+		if (moveToApplicationsError.errorNumber !== -128)
 			throw moveToApplicationsError
 		else
 			app.quit()
@@ -507,75 +583,25 @@ const launchAgentsPath = `${userLibraryFolder}/LaunchAgents`
 const launchAgentPlistPath = `${launchAgentsPath}/${bundleIdentifier}.plist`
 
 if (fileManager.fileExistsAtPath(launchAgentPlistPath)) { // Check if a LaunchAgent exists and update it if needed. See comments below for more info.
-	try {
-		// @ts-ignore: JXA-ObjC
-		const parseLaunchAgentPlistFileError = $()
-		// @ts-ignore: JXA-ObjC
-		const launchAgentPlistDict = ObjC.deepUnwrap($.NSDictionary.dictionaryWithContentsOfURLError($.NSURL.fileURLWithPath(launchAgentPlistPath), parseLaunchAgentPlistFileError))
-		if (!parseLaunchAgentPlistFileError.isNil()) throw new Error(parseLaunchAgentPlistFileError.description.js)
+	const currentAutoLaunchSchedule = parseLaunchAgentSchedule()
+	createLaunchAgentWithDaysAndHour(currentAutoLaunchSchedule.days, currentAutoLaunchSchedule.hour)
 
-		let launchAgentProgramNeedsUpdate = false
+	// NOTES ABOUT CHECKING AND UPDATING LAUNCHAGENT (IF NEEDED) ON EVERY LAUNCH:
 
-		if (launchAgentPlistDict.ProgramArguments !== undefined) {
-			// LaunchAgents created prior to version 2022.10.21-1 specified "ProgramArguments" instead of a single "Program" path to the signed launcher script.
-			// So, if an older LaunchAgent is detected, we need to update it to the new style.
+	// The "createLaunchAgentWithDaysAndHour" function with the same schedule that is already set will check the existing LaunchAgent and make sure it matches the current structure and
+	// expected values and update it if needed, which is very important for the "Program" path in case the app is moved since the launcher path must point to the current app location to work.
 
-			delete launchAgentPlistDict.ProgramArguments
-			launchAgentProgramNeedsUpdate = true
-		}
+	// If the existing LaunchAgent matches the exact expected LaunchAgent structure and values, it WILL NOT be updated or re-bootstrapped.
 
-		const intendedLaunchAgentProgramPath = `${appPath}/Contents/Resources/Launch ${appName}`
-		if (launchAgentPlistDict.Program != intendedLaunchAgentProgramPath) {
-			// If the "Program" path is wrong, that likely means that the app has been moved, so we need to update to the launcher at the new app path.
+	// Calling the "createLaunchAgentWithDaysAndHour" function will also update any LaunchAgents made by previous versions to the currently used structure
+	// which would be used when creating a new LaunchAgent, such as the following changes (and fixes):
 
-			launchAgentPlistDict.Program = intendedLaunchAgentProgramPath
-			launchAgentProgramNeedsUpdate = true
-		}
+	// LaunchAgents created prior to version 2022.10.21-1 specified "ProgramArguments" instead of a single "Program" path to the signed launcher script
+	// and also didn't have "AssociatedBundleIdentifiers" specified for compatibility with macOS 13 Ventura.
 
-		if (launchAgentPlistDict.AssociatedBundleIdentifiers != bundleIdentifier) {
-			// LaunchAgents created prior to version 2022.10.21-1 won't have an "AssociatedBundleIdentifiers" for compatibility with macOS 13 Ventura.
-			// So, if an older LaunchAgent is detected, we need to update it to the new style.
-
-			launchAgentPlistDict.AssociatedBundleIdentifiers = bundleIdentifier
-			launchAgentProgramNeedsUpdate = true
-		}
-
-		if (launchAgentProgramNeedsUpdate || !launchAgentPlistDict.StartCalendarInterval) {
-			debugLog('Updating Outdated LaunchAgent PLIST')
-
-			try {
-				app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`)
-			} catch (bootoutLaunchAgentError) {
-				debugLog('Bootout LaunchAgent Error', bootoutLaunchAgentError)
-			}
-
-			// @ts-ignore: JXA-ObjC
-			try { fileManager.removeItemAtPathError(launchAgentPlistPath, $()) } catch (ignoredError) { /* Ignore */ }
-
-			if (launchAgentPlistDict.StartCalendarInterval)
-				try {
-					// @ts-ignore: JXA-ObjC
-					const writeLaunchAgentToFileError = $()
-					// @ts-ignore: JXA-ObjC
-					if ($(launchAgentPlistDict).writeToURLError($.NSURL.fileURLWithPath(launchAgentPlistPath), writeLaunchAgentToFileError))
-						try {
-							app.doShellScript(`/bin/launchctl bootstrap ${quoteForShell(`gui/${currentUserID}`)} ${quoteForShell(launchAgentPlistPath)}`)
-						} catch (bootstrapLaunchAgentError) {
-							debugLog('Bootstrap LaunchAgent Error', bootstrapLaunchAgentError)
-						}
-					else {
-						if (!writeLaunchAgentToFileError.isNil()) throw new Error(writeLaunchAgentToFileError.description.js)
-						throw new Error('Write LaunchAgent Dict to PLIST Failed')
-					}
-				} catch (writeLaunchAgentPlistError) {
-					debugLog('Write LaunchAgent PLIST Error', writeLaunchAgentPlistError)
-				}
-			else // This should never happen, but check and remove any invalid LaunchAgent just in case.
-				debugLog('Removed INVALID LaunchAgent PLIST (No "StartCalendarInterval" Specified)')
-		}
-	} catch (readLaunchAgentPlistError) {
-		debugLog('Read Program From LaunchAgent PLIST Error', readLaunchAgentPlistError)
-	}
+	// LaunchAgents updated on launch by version 2022.11.17-1 and 2022.11.23-1 would accidentally/incorrectly have their "integer" values converted to "real" values
+	// (because of running "deepUnwrap" on the NSDictionary of the plist, see comments in "createLaunchAgentWithDaysAndHour" function for more info about this JS int conversion issue)
+	// which would not get parsed correctly by "launchd" and cause the app to incorrectly be automatically launched every minute or every hour.
 }
 
 const libraryITunesFolder = `${userLibraryFolder}/iTunes`
@@ -631,7 +657,7 @@ To use ${appName}, you must agree to let it manage your iTunes Software Updates 
 				sharedWorkspace.openURL($.NSURL.fileURLWithPath(appleConfiguratorFirmwareFolder))
 			}
 		} catch (welcomeDialogError) {
-			if (welcomeDialogError.message == 'User canceled.')
+			if (welcomeDialogError.errorNumber === -128)
 				cleanUpAndQuitEarly()
 			else {
 				debugLog('Welcome Dialog Error', welcomeDialogError)
@@ -744,7 +770,7 @@ ${newVersionReleaseNotes}`,
 
 							break
 						} catch (appUpdatedDialogError) {
-							if (appUpdatedDialogError.message == 'User canceled.')
+							if (appUpdatedDialogError.errorNumber === -128)
 								// @ts-ignore: JXA-ObjC
 								sharedWorkspace.openURL($.NSURL.URLWithString(releaseNotesURL))
 							else
@@ -966,12 +992,12 @@ if (macIsAwakeAndUnlocked()) { // Skip launch window if asleep or locked (just s
 				autoStartSeconds
 			)
 
-			if ((countDownDialogReply.gaveUp == true) || (countDownDialogReply.buttonReturned == 'Start Now'))
+			if (countDownDialogReply.gaveUp || (countDownDialogReply.buttonReturned == 'Start Now'))
 				break
 			else if (countDownDialogReply.buttonReturned == `Edit ${settingsOrPreferencesName}…`)
 				promptForPreferences()
 		} catch (countDownDialogError) {
-			if (countDownDialogError.message == 'User canceled.')
+			if (countDownDialogError.errorNumber === -128)
 				cleanUpAndQuitEarly()
 			else
 				break // Just start if somehow times out or other error
@@ -1014,7 +1040,7 @@ try {
 } catch (moveOutOfAppleConfiguratorFirmwareFolderError) {
 	debugLog('Move iPhone, iPad, and iPod Firmware Out Of Apple Configurator Firmware Folder Error', moveOutOfAppleConfiguratorFirmwareFolderError)
 
-	if (!userDidCancel) userDidCancel = (moveOutOfAppleConfiguratorFirmwareFolderError.message == 'User canceled.')
+	if (!userDidCancel) userDidCancel = (moveOutOfAppleConfiguratorFirmwareFolderError.errorNumber === -128)
 }
 
 try {
@@ -1040,7 +1066,7 @@ try {
 } catch (moveOutOfLibraryITunesSoftwareUpdatesFoldersError) {
 	debugLog('Move Apple TV and HomePod Firmware Out Of iTunes Software Updates Folders Error', moveOutOfLibraryITunesSoftwareUpdatesFoldersError)
 
-	if (!userDidCancel) userDidCancel = (moveOutOfLibraryITunesSoftwareUpdatesFoldersError.message == 'User canceled.')
+	if (!userDidCancel) userDidCancel = (moveOutOfLibraryITunesSoftwareUpdatesFoldersError.errorNumber === -128)
 }
 
 debugLog('Starting to Check for IPSW Firmware Updates')
@@ -1128,10 +1154,10 @@ try {
 } catch (getFirmwaresError) {
 	setProgressStopButtonEnabled(false)
 
+	if (!userDidCancel) userDidCancel = (getFirmwaresError.errorNumber === -128)
+
 	let getFirmwaresErrorMessage = getFirmwaresError.message
 	if (!readFirmwaresFileError.isNil()) getFirmwaresError = readFirmwaresFileError.description.js
-
-	if (!userDidCancel) userDidCancel = (getFirmwaresErrorMessage == 'User canceled.')
 
 	try {
 		// @ts-ignore: JXA-ObjC
@@ -1313,7 +1339,7 @@ if (uniqueFirmwaresCount > 0) {
 
 		debugLog('Error Verifying Firmware & Checking for Updates', verifyFirmwareAndCheckForUpdatesError)
 
-		if (verifyFirmwareAndCheckForUpdatesError.message == 'User canceled.') {
+		if (verifyFirmwareAndCheckForUpdatesError.errorNumber === -128) {
 			userDidCancel = true
 			firmwaresNeedingUpdate = {}
 		}
@@ -1422,7 +1448,7 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 									// @ts-ignore: JXA-ObjC
 									rawProgressSpeed = $.NSString.stringWithContentsOfFileEncodingError(firmwareProgressOutputFile, $.NSUTF8StringEncoding, $()).js.split(/\n|\r/).slice(-1)[0].split(' ').slice(-1)[0]
 								} catch (readProgressError) {
-									if (readProgressError.message == 'User canceled.')
+									if (readProgressError.errorNumber === -128)
 										throw readProgressError
 								}
 
@@ -1432,7 +1458,7 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 										// @ts-ignore: JXA-ObjC
 										downloadedFileSize = fileManager.attributesOfItemAtPathError(downloadFirmwareFilePath, $()).objectForKey('NSFileSize').js
 								} catch (downloadedFileSizeError) {
-									if (downloadedFileSizeError.message == 'User canceled.')
+									if (downloadedFileSizeError.errorNumber === -128)
 										throw downloadedFileSizeError
 								}
 
@@ -1527,9 +1553,9 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 					if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
 
-					let firmwareDownloadErrorMessage = firmwareDownloadError.message
+					if (!userDidCancel) userDidCancel = (firmwareDownloadError.errorNumber === -128)
 
-					if (!userDidCancel) userDidCancel = (firmwareDownloadErrorMessage == 'User canceled.')
+					let firmwareDownloadErrorMessage = firmwareDownloadError.message
 
 					try {
 						// @ts-ignore: JXA-ObjC
@@ -1580,7 +1606,7 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 					} catch (cleanUpAfterDownloadError) {
 						debugLog('Clean Up After Download Error', cleanUpAfterDownloadError)
 
-						if (!userDidCancel) userDidCancel = (cleanUpAfterDownloadError.message == 'User canceled.')
+						if (!userDidCancel) userDidCancel = (cleanUpAfterDownloadError.errorNumber === -128)
 					}
 
 					break
@@ -1594,7 +1620,7 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 ⏭️ Skipped: ${((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)}
 `
-			throw new Error('User canceled.')
+			throw new Error('Skipped Download Because User Canceled')
 		}
 
 		// @ts-ignore: JXA
@@ -1606,7 +1632,7 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
 
-		if (updatingError.message == 'User canceled.') {
+		if (userDidCancel || (updatingError.errorNumber === -128)) {
 			skippedCount ++
 
 			if (firmwaresNeedingUpdateCount > actualProgressCount) {
@@ -1625,8 +1651,8 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 					userDidCancel = true // If gaveUp or defaultButton, then really cancel and skip all.
 				} catch (confirmCancelError) {
-					if (confirmCancelError.message == 'User canceled.') // "User canceled." is the user selecting cancelButton which is Skip One.
-						userDidCancel = false // Undo previously set userDidCancel to keep going after just skipping one.
+					if (confirmCancelError.errorNumber === -128) // This time, -128 is the user selecting "cancelButton" which is choosing to just skip one, not all.
+						userDidCancel = false // So, undo previously set "userDidCancel" to keep going after just skipping one.
 					else
 						debugLog('Confirm Cancel Error', updatingError)
 				}
@@ -1747,7 +1773,7 @@ for ( ; ; ) {
 						} catch (trashUnsignedFirmwareError) {
 							debugLog('Trash Unsigned Firmware Error', trashUnsignedFirmwareError)
 
-							if (!userDidCancel) userDidCancel = (trashUnsignedFirmwareError.message == 'User canceled.')
+							if (!userDidCancel) userDidCancel = (trashUnsignedFirmwareError.errorNumber === -128)
 						}
 					}
 				}
@@ -1785,7 +1811,7 @@ for ( ; ; ) {
 				} catch (cleanUpAfterUpdateError) {
 					debugLog('Clean Up After Update Error', cleanUpAfterUpdateError)
 
-					if (!userDidCancel) userDidCancel = (cleanUpAfterUpdateError.message == 'User canceled.')
+					if (!userDidCancel) userDidCancel = (cleanUpAfterUpdateError.errorNumber === -128)
 				}
 
 				Progress.completedUnitCount --
@@ -1893,13 +1919,6 @@ for ( ; ; ) {
 ⚠️ ${downloadErrorsCount} Download Error${((downloadErrorsCount == 1) ? '' : 's')} Occurred`
 
 				const appUpdateAvailable = getPreference('AppUpdateAvailable', 'bool')
-				let appUpdateAvailableDisplay = ''
-				if (getPreference('AppUpdateAvailable', 'bool')) {
-					appUpdateAvailableDisplay = `
-
-⤴️ An App Update is Available!`
-				}
-
 				const resultsDialogButtons = [(appUpdateAvailable ? 'Update App…' : 'Quit')]
 
 				let openUpdatesLogDisplay = ''
@@ -1917,7 +1936,7 @@ for ( ; ; ) {
 					resultsDialogButtons.shift()
 
 				const autoLaunchSchedule = parseLaunchAgentSchedule()
-				const didAcknowledgeSignificantResultsAndUpToDate = (getPreference('AcknowledgedSignificantResults', 'bool') && !getPreference('AppUpdateAvailable', 'bool'))
+				const didAcknowledgeSignificantResultsAndUpToDate = (getPreference('AcknowledgedSignificantResults', 'bool') && !appUpdateAvailable)
 
 				const nowDate = new Date()
 
@@ -2037,7 +2056,9 @@ for ( ; ; ) {
 
 				app.activate()
 
-				const fullResultsSummary = `${lastErrorSummary}${lastUpdateSummary}${openUpdatesLogDisplay}${appUpdateAvailableDisplay}`
+				const fullResultsSummary = `${lastErrorSummary}${lastUpdateSummary}${openUpdatesLogDisplay}${(appUpdateAvailable ? `
+
+⤴️ An App Update is Available!` : '')}`
 
 				const resultsDialogReply = app.displayDialog(`${resultsSummary}${fullResultsSummary ? `
 ${fullResultsSummary}` : ''}`,
@@ -2066,7 +2087,7 @@ ${fullResultsSummary}` : ''}`,
 				}
 			} catch (displayResultsError) {
 				debugLog('Display Results Error', displayResultsError)
-				if (displayResultsError.message.includes('timed out')) {
+				if (displayResultsError.errorNumber === -1712) { // https://developer.apple.com/library/archive/documentation/AppleScript/Conceptual/AppleScriptLangGuide/reference/ASLR_error_codes.html#//apple_ref/doc/uid/TP40000983-CH220-SW6
 					dialogTimedOutEarly = true
 					// @ts-ignore: JXA
 					delay(15)
@@ -2076,7 +2097,7 @@ ${fullResultsSummary}` : ''}`,
 
 		break
 	} catch (showResultsError) {
-		if (showResultsError.message != 'User canceled.')
+		if (showResultsError.errorNumber !== -128)
 			break
 	}
 }
@@ -2105,16 +2126,16 @@ function displayAlertOrDialogDependingOnOS(titleText, messageText, windowTitle, 
 			// NOTE: One BIG catch with the macOS 11 Big Sur and newer alert style is that all leading whitespace for each line will be trimmed.
 			// This makes sense so that centered text always looks decent, but that leading whitespace will STILL be trimmed when the new
 			// "extended" alert style is used on macOS 13 Ventura and newer, which is not necessary since the text will be left aligned.
-			// Since the messages displayed by IPSW Updater rely on tab indented formatting to look correct, this trimming behavior is worked around by replacing every
-			// TAB character with NULL+TAB so that the line will no longer start with whitespace (since it will start with a NULL char instead) and therefore will NOT be trimmed.
+			// Since the messages displayed by IPSW Updater rely on tab indented formatting to look correct, this trimming behavior is worked around by replacing the first
+			// TAB on each line with NULL+TAB so that the line will no longer start with whitespace (since it will start with a NULL char instead) and therefore will NOT be trimmed.
 
-			if (titleText.includes('\t')) titleText = titleText.replace(/\t/g, '\0\t')
-			if (messageText.includes('\t')) messageText = messageText.replace(/\t/g, '\0\t')
+			if (titleText.includes('\t')) titleText = titleText.replace(/^\t/gm, '\0\t')
+			if (messageText.includes('\t')) messageText = messageText.replace(/^\t/gm, '\0\t')
 		}
 
 		if (messageText) dialogOrAlertProperties.message = messageText
-		if ((icon == 'note') || (icon == 'informational')) dialogOrAlertProperties.as = 'informational'
 		if ((icon == 'caution') || (icon == 'stop') || (icon == 'critical') || (icon == 'warning')) dialogOrAlertProperties.as = 'critical'
+		// Do not need to explicitly set "as" to "informational" if "note" is specified since it is the default.
 
 		return app.displayAlert(titleText, dialogOrAlertProperties)
 	} else {
@@ -2258,7 +2279,7 @@ function calculateChecksumForFile(filePath, algorithm = 1) {
 			// @ts-ignore: JXA-ObjC
 			try { fileManager.removeItemAtPathError(checksumOutputFile, $()) } catch (ignoredError) { /* Ignore */ }
 
-			if (calculateChecksumError.message == 'User canceled.') {
+			if (calculateChecksumError.errorNumber === -128) {
 				setProgressStopButtonEnabled(false)
 				throw calculateChecksumError
 			}
@@ -2348,6 +2369,94 @@ function openProgressWindow() {
 		// @ts-ignore: JXA-ObjC
 		progressWindow.makeKeyAndOrderFront($.NSApp)
 	}
+}
+
+function validateCodeSignatureForAppAtPath(validateAppPath) {
+	// @ts-ignore: JXA-ObjC
+	const validateAppBundle = $.NSBundle.bundleWithPath(validateAppPath)
+	if (validateAppBundle.isNil())
+		throw new Error(`Code Signature Validation Failed
+
+“${validateAppPath}” is not a valid application bundle.`)
+
+	const validateAppVersion = validateAppBundle.objectForInfoDictionaryKey('CFBundleShortVersionString').js // DO NOT use the "appVersion" variable of the running app since this function may be validating an app update and not the running app.
+	if (!validateAppVersion)
+		throw new Error(`Code Signature Validation Failed
+
+“${validateAppPath}” does not have a valid “CFBundleShortVersionString”.`)
+
+	const verifyNotarization = (!validateAppVersion.endsWith('-0') && isMojaveOrNewer) // DO NOT verify notarization for testing builds (with versions ending in "-0") since they will only be signed and not notarized, and see comments below about how notarization CANNOT be verified on macOS 10.13 High Sierra.
+
+	const intendedCodeSignatureTeamID = 'YRW6NUGA63'
+	const validCSReqString = `${verifyNotarization ? 'notarized and ' : ''}identifier "${bundleIdentifier}" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = ${intendedCodeSignatureTeamID}`
+	// Explanation of Code Signing Requirement Strings: https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements
+	// The specified CSReqs string is verifying the correct Bundle ID, Team ID, and that it is signed with a Developer ID certificate, and starting on macOS 10.14 Mojave,
+	// there is a "notarized" token which can be included in the CSReq string to confirm the app is notarized, so notarization is also verified when that token is available and it not a testing build (discovered this wasn't supported/available on macOS 10.13 High Sierra through testing).
+	// This "notarized" token can be seen in the output of "spctl --list" on macOS 10.14 Mojave and newer and can also be seen here: https://gregoryszorc.com/docs/apple-codesign/stable/apple_codesign_gatekeeper.html
+	// This other "generate-csreq-hex-for-tcc-db.jxa" script also contains information about CSReqs and the "Security" framework functions to retreive them via JXA (which are used below): https://github.com/freegeek-pdx/macOS-Testing-and-Deployment-Scripts/blob/main/Other%20Scripts/generate-csreq-hex-for-tcc-db.jxa
+
+	// This first check is done using native C functions of the "Security" framework (such as https://developer.apple.com/documentation/security/1395784-secstaticcodecheckvalidity?language=objc).
+	// This checking using native C function may be a bit overzealous, but the basic code was already written for "mkuser" (https://mkuser.sh) where it was important to run code signature checks using native
+	// functions so the result could not be spoofed by a MITM type attack on the "codesign" or "spctl" commands: https://github.com/freegeek-pdx/mkuser/blob/c5c1642912ca1551197b9490339b0a8303a45071/mkuser.sh#L4072-L4165
+
+	// @ts-ignore: JXA-ObjC
+	const staticCodeRef = $()
+	// @ts-ignore: JXA-ObjC
+	const actualCSReqRef = $()
+	// @ts-ignore: JXA-ObjC
+	const actualCSReqStringRef = $()
+	// @ts-ignore: JXA-ObjC
+	const validCSReqRef = $()
+	let csReqValidityErrorCode = -1
+	// @ts-ignore: JXA-ObjC
+	const csReqValidityPassed = (($.SecStaticCodeCreateWithPath($.NSURL.fileURLWithPath(validateAppPath), $.kSecCSDefaultFlags, staticCodeRef) === 0) && !staticCodeRef.isNil() &&
+		// @ts-ignore: JXA-ObjC
+		($.SecCodeCopyDesignatedRequirement(staticCodeRef, $.kSecCSDefaultFlags, actualCSReqRef) === 0) && !actualCSReqRef.isNil() &&
+		// @ts-ignore: JXA-ObjC
+		($.SecRequirementCopyString(actualCSReqRef, $.kSecCSDefaultFlags, actualCSReqStringRef) === 0) && !actualCSReqStringRef.isNil() && // Only retrieving actual CSReqs string for display if there is an error. DO NOT compare it litarally like "(validCSReqString === actualCSReqStringRef.js)" since it WILL NOT contain the "notarized" token, and comparing literal CSReq strings to each other is not technically reliable/correct since conditions can be specified in different orders and still be valid/equal. The following "SecStaticCodeCheckValidity" function properly evaluates the conditions in the "validCSReqString" against the "staticCodeRef" of the app.
+		// @ts-ignore: JXA-ObjC
+		($.SecRequirementCreateWithString($.CFStringCreateWithCString($.kCFAllocatorDefault, validCSReqString, $.kCFStringEncodingUTF8), $.kSecCSDefaultFlags, validCSReqRef) === 0) &&
+		!validCSReqRef.isNil() && // First check that "validCSReqRef" is NOT nil/NULL to be sure the valid requirement string itself is a proper CSReqs string (since if not, nil/NULL would be passed to "SecStaticCodeCheckValidity" which would just verify against the binaries internal requirements).
+		// @ts-ignore: JXA-ObjC
+		((csReqValidityErrorCode = $.SecStaticCodeCheckValidity(staticCodeRef, $.kSecCSCheckAllArchitectures, validCSReqRef)) === 0)) // I also tried using "$.SecCodeCheckValidity(staticCodeRef, $.kSecCSDefaultFlags, validCSReqRef)" but it always returned error code "-67071" (errSecCSInvalidObjectRef = Invalid API object reference) while "SecStaticCodeCheckValidity" seems to properly check the CSReq string and return "0" when sucessfully matched.
+
+	// The "SecStaticCodeCheckValidity" function above does basically the same thing as the following "codesign -vvR" command, but still double-check it succeeds to be extra thorough and show useful output if anything fails.
+	let codesignVerifyPassed = false
+	let codesignVerifyErrorCode = -1
+	let codesignVerifyOutput = 'UNKNOWN CODESIGN VERIFY ERROR'
+	try {
+		codesignVerifyOutput = app.doShellScript(`/usr/bin/codesign -vvR ${quoteForShell(`=${validCSReqString}`)} ${quoteForShell(validateAppPath)} 2>&1`)
+		codesignVerifyPassed = true
+	} catch (codesignVerifyError) {
+		codesignVerifyErrorCode = codesignVerifyError.errorNumber
+		codesignVerifyOutput = codesignVerifyError.message
+	}
+
+	// The "SecStaticCodeCheckValidity" function AND "codesign -vvR" command above already confirm the app is signed by the intended Team ID (and notarized, when possible on macOS 10.14 Mojave or newer)
+	// but still triple-check by running "spctl -avv" and confirm it succeeds AND contains specific output to be extra thorough and show useful output if anything fails.
+	let spctlAssessPassed = false
+	let spctlAssessErrorCode = -1
+	let spctlAssessOutput = 'UNKNOWN SPCTL ASSESS ERROR'
+	try {
+		spctlAssessOutput = app.doShellScript(`/usr/sbin/spctl -avv ${quoteForShell(validateAppPath)} 2>&1`)
+		spctlAssessPassed = (spctlAssessOutput.includes(`source=${verifyNotarization ? 'Notarized ' : ''}Developer ID`) && spctlAssessOutput.endsWith(`origin=Developer ID Application: Pico Mitchell (${intendedCodeSignatureTeamID})`)) // The "spctl -avv" output on macOS 10.13 High Sierra will only ever include "source=Developer ID" even if it's actually notarized while macOS 10.14 Mojave and newer will include "source=Notarized Developer ID".
+	} catch (spctlAssessError) {
+		spctlAssessErrorCode = spctlAssessError.errorNumber
+		spctlAssessOutput = spctlAssessError.message
+	}
+
+	if (!csReqValidityPassed || !codesignVerifyPassed || !spctlAssessPassed)
+		throw new Error(`Code Signature Validation Failed for App at Path:
+${validateAppPath}
+
+Code Signature Verification: ${codesignVerifyPassed ? 'PASSED' : `FAILED (${codesignVerifyErrorCode})`}
+${codesignVerifyOutput.replace(/^.*\.app: /gm, '')}
+
+Security Assessment: ${spctlAssessPassed ? 'PASSED' : `FAILED (${spctlAssessErrorCode})`}
+${spctlAssessOutput.replace(/^.*\.app: /gm, '')}
+
+Code Signing Requirements: ${csReqValidityPassed ? 'PASSED' : `FAILED (${csReqValidityErrorCode})`}
+${actualCSReqStringRef.isNil() ? 'NO CSREQS' : actualCSReqStringRef.js}`) // Show "Code Signing Requirements" last since it's the most cryptic output and the other output has more understandable error messages.
 }
 
 function checkAndInstallAppUpdates() {
@@ -2469,7 +2578,7 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 							sharedWorkspace.openURL($.NSURL.URLWithString(releaseNotesURL))
 						} else {
 							userClickedInstall = appUpdateAvailableReply.buttonReturned.includes(latestAppUpdateInfo.version)
-							shouldInstallUpdate = (((appUpdateAvailableReply.gaveUp == true) && autoInstallUpdate) || userClickedInstall)
+							shouldInstallUpdate = ((appUpdateAvailableReply.gaveUp && autoInstallUpdate) || userClickedInstall)
 							break
 						}
 					}
@@ -2510,39 +2619,54 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 					setProgressStopButtonEnabled(false)
 
 					const appUpdateZipFileSHA512Sum = calculateChecksumForFile(appUpdateZipFilePath, 512)
-					if (latestAppUpdateInfo.sha512sum == appUpdateZipFileSHA512Sum) {
-						Progress.description = `
+					if (latestAppUpdateInfo.sha512sum != appUpdateZipFileSHA512Sum)
+						throw new Error(`App Update ZIP File Is Invalid
+
+Intended ZIP Checksum:
+${latestAppUpdateInfo.sha512sum}
+
+Downloaded ZIP Checksum:
+${appUpdateZipFileSHA512Sum}`)
+
+					Progress.description = `
 🔄	Installing & Launching ${appName} Version ${latestAppUpdateInfo.version}`
-						Progress.additionalDescription = ''
-						// @ts-ignore: JXA
-						delay(0.25)
+					Progress.additionalDescription = ''
+					// @ts-ignore: JXA
+					delay(0.25)
 
-						const appUpdateTempFilePath = app.doShellScript(`/usr/bin/ditto -x -k -V --noqtn ${quoteForShell(appUpdateZipFilePath)} ${quoteForShell(temporaryFilesFolder)} 2>&1`).match(/copying file (.+?)\.app\/Contents\/Info\.plist \.\.\. /)[0].replace('copying file ', `${temporaryFilesFolder}/`).replace('/Contents/Info.plist ... ', '')
+					const appUpdateTempFilePath = app.doShellScript(`/usr/bin/ditto -xkV --noqtn ${quoteForShell(appUpdateZipFilePath)} ${quoteForShell(temporaryFilesFolder)} 2>&1`).match(/copying file (.+?)\.app\/Contents\/Info\.plist \.\.\. /)[0].replace('copying file ', `${temporaryFilesFolder}/`).replace('/Contents/Info.plist ... ', '')
 
-						if (fileManager.fileExistsAtPath(appUpdateTempFilePath)) {
-							setPreference('AppJustAutoUpdated', true, 'bool')
+					// @ts-ignore: JXA-ObjC
+					try { fileManager.removeItemAtPathError(appUpdateZipFilePath, $()) } catch (ignoredError) { /* Ignore */ }
 
-							// @ts-ignore: JXA-ObjC
-							try { fileManager.removeItemAtPathError(appUpdateProgressOutputFile, $()) } catch (ignoredError) { /* Ignore */ }
-							// @ts-ignore: JXA-ObjC
-							try { fileManager.removeItemAtPathError(appUpdateZipFilePath, $()) } catch (ignoredError) { /* Ignore */ }
+					if (!fileManager.fileExistsAtPath(appUpdateTempFilePath))
+						throw new Error('App Update Not Found After Unzipping Download')
 
-							// @ts-ignore: JXA-ObjC
-							try { fileManager.setAttributesOfItemAtPathError($.NSDictionary.dictionaryWithObjectForKey($.NSDate.date, $.NSFileModificationDate), appUpdateTempFilePath, $()) } catch (ignoredError) { /* Ignore */ } // "touch" unzipped app.
+					// @ts-ignore: JXA-ObjC
+					try { fileManager.removeItemAtPathError(appUpdateProgressOutputFile, $()) } catch (ignoredError) { /* Ignore */ }
 
-							// @ts-ignore: JXA
-							delay(0.25)
+					// IMPORTANT: Before installing the updated app, confirm that it is properly signed (and notarized, when possible on macOS 10.14 Mojave and newer).
+					// See comments in the "validateCodeSignatureForAppAtPath" function for more information.
+					validateCodeSignatureForAppAtPath(appUpdateTempFilePath) // NOTE: This function with "throw" an error if validation fails which will be caught and displayed below.
 
-							// @ts-ignore: JXA-ObjC
-							const globalApplicationsFolderIsWritableRef = $()
-							// @ts-ignore: JXA-ObjC
-							try { $.NSURL.fileURLWithPath('/Applications').getResourceValueForKeyError(globalApplicationsFolderIsWritableRef, $.NSURLIsWritableKey, $()) } catch (ignoredError) { /* Ignore */ }
-							const globalApplicationsFolderIsWritable = globalApplicationsFolderIsWritableRef.js
+					setPreference('AppJustAutoUpdated', true, 'bool')
 
-							// @ts-ignore: JXA-ObjC
-							const updatedAppFileName = `${$(appUpdateTempFilePath).lastPathComponent.js}`
+					// @ts-ignore: JXA-ObjC
+					try { fileManager.setAttributesOfItemAtPathError($.NSDictionary.dictionaryWithObjectForKey($.NSDate.date, $.NSFileModificationDate), appUpdateTempFilePath, $()) } catch (ignoredError) { /* Ignore */ } // "touch" unzipped app.
 
-							const installAppUpdateScript = `/usr/bin/osascript -e ${quoteForShell(`
+					// @ts-ignore: JXA
+					delay(0.25)
+
+					// @ts-ignore: JXA-ObjC
+					const globalApplicationsFolderIsWritableRef = $()
+					// @ts-ignore: JXA-ObjC
+					try { $.NSURL.fileURLWithPath('/Applications').getResourceValueForKeyError(globalApplicationsFolderIsWritableRef, $.NSURLIsWritableKey, $()) } catch (ignoredError) { /* Ignore */ }
+					const globalApplicationsFolderIsWritable = globalApplicationsFolderIsWritableRef.js
+
+					// @ts-ignore: JXA-ObjC
+					const updatedAppFileName = `${$(appUpdateTempFilePath).lastPathComponent.js}`
+
+					const installAppUpdateScript = `/usr/bin/osascript -e ${quoteForShell(`
 use AppleScript version "2.7"
 use scripting additions
 use framework "Foundation"
@@ -2699,27 +2823,19 @@ on error
 				activate
 				beep
 				display alert "Error Launching “${quoteForAppleScript(appName, true)}” After Update" message launchError buttons {"Quit", "Re-Download “${quoteForAppleScript(appName, true)}”"} cancel button 1 default button 2 as critical
-				do shell script "/usr/bin/open 'https://ipsw.app/download'"
+				do shell script "/usr/bin/open 'https://ipsw.app/download/'"
 			end try
 		end try
 	end try
 end try
 `)} > /dev/null 2>&1 &`
 
-							//debugDialog(installAppUpdateScript.replace(/\/usr\/bin\/osascript -e '|' > \/dev\/null 2>&1 &/g, '').replace(/'\\''/g, "'").trim())
-							//debugDialog(app.doShellScript(installAppUpdateScript.replace('/usr/bin/osascript -e ', "printf '%s' ").replace(' > /dev/null 2>&1 &', '')).trim())
+					//debugDialog(installAppUpdateScript.replace(/\/usr\/bin\/osascript -e '|' > \/dev\/null 2>&1 &/g, '').replace(/'\\''/g, "'").trim())
+					//debugDialog(app.doShellScript(installAppUpdateScript.replace('/usr/bin/osascript -e ', "printf '%s' ").replace(' > /dev/null 2>&1 &', '')).trim())
 
-							app.doShellScript(installAppUpdateScript)
+					app.doShellScript(installAppUpdateScript)
 
-							app.quit()
-						} else
-							throw new Error(`App Update Not Found After Unzipping
-
-${appUpdateTempFilePath}`)
-					} else
-						throw new Error(`Invalid App Update ZIP File
-
-Downloaded File Checksum (${appUpdateZipFileSHA512Sum}) != Intended Checksum (${latestAppUpdateInfo.sha512sum})`)
+					app.quit()
 				}
 			} else
 				setPreference('AppUpdateAvailable', false, 'bool')
@@ -2729,12 +2845,12 @@ Downloaded File Checksum (${appUpdateZipFileSHA512Sum}) != Intended Checksum (${
 
 			closeProgressWindow()
 		} else
-			throw new Error(`App Updates Info is Empty or is not an Array`)
+			throw new Error(`App Updates Info Is Empty or Is Not an Array`)
 	} catch (appUpdateError) {
+		if (!userCanceledUpdate) userCanceledUpdate = (appUpdateError.errorNumber === -128)
+
 		let appUpdateErrorMessage = appUpdateError.message
 		if (!readAppUpdatesFileError.isNil()) appUpdateError = readAppUpdatesFileError.description.js
-
-		if (!userCanceledUpdate) userCanceledUpdate = (appUpdateErrorMessage == 'User canceled.')
 
 		try {
 			// @ts-ignore: JXA-ObjC
@@ -2751,18 +2867,37 @@ Downloaded File Checksum (${appUpdateZipFileSHA512Sum}) != Intended Checksum (${
 		closeProgressWindow()
 
 		if (!userCanceledUpdate && macIsAwakeAndUnlocked()) {
-			app.activate()
-			app.displayAlert(`${appName}: App Update Error`,
-				{
-					message: `${appUpdateErrorMessage.replace('CURL Error: (6) ', '')}${appUpdateErrorMessage.startsWith('CURL Error:') ? '' : `
+			const appUpdateErrorAlertMessage = `${appUpdateErrorMessage.replace('CURL Error: (6) ', '')}${(appUpdateErrorMessage.startsWith('CURL Error:') || appUpdateErrorMessage.startsWith('App Update ') || appUpdateErrorMessage.startsWith('Code Signature Validation ')) ? '' : `
 
-${((typeof appUpdateError == 'object') ? JSON.stringify(appUpdateError, Object.getOwnPropertyNames(appUpdateError)) : appUpdateError)}`}`, // Do NOT display detailed error message (such as failing to read or parse file) if the actual error was because of a CURL download failure since it may just confuse the actual issue.
-					as: 'critical',
-					buttons: ['OK'],
-					defaultButton: 1,
-					givingUpAfter: 30
-				}
-			)
+${((typeof appUpdateError == 'object') ? JSON.stringify(appUpdateError, Object.getOwnPropertyNames(appUpdateError)) : appUpdateError)}`}` // Do NOT display detailed error message (such as failing to read or parse file) if the actual error was because of a CURL download failure since it may just confuse the actual issue, and do not show "appUpdateError" dict for "App Update" or "Code Signature" error messages since the custom message itself contains all the relevant info.
+
+			app.activate()
+			if (getPreference('AppUpdateAvailable', 'bool'))
+				try {
+					const appUpdateErrorAlertReply = app.displayAlert(`${appName}: App Update Error`,
+						{
+							message: appUpdateErrorAlertMessage,
+							as: 'critical',
+							buttons: ['Continue With Outdated Version', 'Manually Download Update & Quit'],
+							cancelButton: 1,
+							defaultButton: 2,
+							givingUpAfter: 30
+						}
+					)
+
+					if (!appUpdateErrorAlertReply.gaveUp) {
+						app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+						app.quit()
+					}
+				} catch (ignoredError) { /* Ignore */ }
+			else
+				app.displayAlert(`${appName}: App Update Error`,
+					{
+						message: appUpdateErrorAlertMessage,
+						as: 'critical',
+						givingUpAfter: 30
+					}
+				)
 		}
 	}
 }
@@ -2809,9 +2944,7 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 			app.displayAlert(`${appName} won't have any IPSW Firmware files to download if you exclude everything!`,
 				{
 					message: 'You must include at least one type of product.',
-					as: 'informational',
-					buttons: ['OK'],
-					defaultButton: 1
+					as: 'critical'
 				}
 			)
 
@@ -3014,120 +3147,13 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 		// Don't Auto-Launch OR Remove Auto-Launch
 	}
 
-	if (newAutoLaunchDaysArray.length > 0) {
-		// NOTE: The following LaunchAgent dictionary specifies a "Launch IPSW Updater" script which is created and SIGNED by the "Build IPSW Updater.applescript" script.
-		// This script MUST be signed so that the "AssociatedBundleIdentifier" key can be used in macOS 13 Ventura so that the LaunchAgent is properly displayed as being for the "IPSW Updater" app.
-		// This is because the executable in the LaunchAgent MUST have a Code Signing Team ID that matches the Team ID of the app Bundle ID specified in the "AssociatedBundleIdentifiers" key (as described in https://developer.apple.com/documentation/servicemanagement/updating_helper_executables_from_earlier_versions_of_macos?language=objc#4065210).
-		// DO NOT want to have the LaunchAgent just run the "IPSW Updater" app binary directly because if the app is launched that way via the LaunchAgent and then the LaunchAgent is removed during that execution the app will be terminated immediately when "launchctl bootout" is run.
-		// That issue has always been avoided by using the "/usr/bin/open" binary to launch the app instead. But using "/usr/bin/open" directly in the LaunchAgent on macOS 13 Ventura makes it show as just running "open" from an unidentified developer in the new Login Items list, which may seem suspicious or confusing.
-		// Making this simple SIGNED "Launch IPSW Updater" script which just runs "/usr/bin/open" with the path to the app and then using the "AssociatedBundleIdentifiers" allows the LaunchAgent to be properly displayed as being for the "IPSW Updater" app.
-		// When on macOS 12 Monterey and older, the "AssociatedBundleIdentifiers" will just be ignored and the "Launch IPSW Updater" will function the same as if "/usr/bin/open" was directly specified with the path to the app in the LaunchAgent.
-		// Search for "AssociatedBundleIdentifiers" in the "Build IPSW Updater.applescript" script to see the "Launch IPSW Updater" script creation and signing code.
+	createLaunchAgentWithDaysAndHour(newAutoLaunchDaysArray, newAutoLaunchHour) // This function will create, update, or remove the LaunchAgent as needed based on the input and any existing LaunchAgent.
 
-		// ALSO NOTE: Manually creating the LaunchAgent plist in this way is considered to be a "Legacy LaunchAgent" as of macOS 13 Ventura: https://developer.apple.com/documentation/servicemanagement/updating_helper_executables_from_earlier_versions_of_macos?language=objc
-		// But, the new modern LaunchAgent and LaunchDaemon setup requires that the plist be pre-made and included within the app contents.
-		// That is not easily feasible for the needs of this use-case where the user can dynamically choose the day(s) and time that they want the app to be launched.
-		// It would techinically be possible pre-make and include every possible LaunchAgent plist and enable the correct one based on the users choice, but that would be hundreds of possible plists.
-		// Continuing to create a "Legacy LaunchAgent" by making the LaunchAgent plist dynamically based on the user input and using the "AssociatedBundleIdentifiers" key as described above to properly associate it with the "IPSW Updater" app makes the most sense as long as this "Legacy LaunchAgent" technique continues to work and be allowed by macOS.
-
-		const launchAgentDict = {
-			Label: bundleIdentifier,
-			Program: `${appPath}/Contents/Resources/Launch ${appName}`,
-			AssociatedBundleIdentifiers: bundleIdentifier,
-			RunAtLoad: false,
-			StandardOutPath: '/dev/null',
-			StandardErrorPath: '/dev/null'
-		}
-
-		// NOTE: If the following numbers for the LaunchAgent plist are left as JS ints,
-		// they will be set to "real" types instead of "integer" types when the
-		// dictionary is wrapped to an NSDictionary and written as a plist.
-		// So, explicitly wrapping them into NSNumbers solves that.
-
-		// @ts-ignore: JXA-ObjC
-		const newAutoLaunchHourNumber = $.NSNumber.numberWithInt(newAutoLaunchHour)
-		// @ts-ignore: JXA-ObjC
-		const defaultAutoLaunchMinuteNumber = $.NSNumber.numberWithInt(defaultAutoLaunchMinute)
-
-		if (JSON.stringify(newAutoLaunchDaysArray) == JSON.stringify(everyDayOfTheWeek))
-			launchAgentDict.StartCalendarInterval = {
-				Hour: newAutoLaunchHourNumber,
-				Minute: defaultAutoLaunchMinuteNumber
-			}
-		else if (newAutoLaunchDaysArray.length == 1)
-			launchAgentDict.StartCalendarInterval = {
-				Hour: newAutoLaunchHourNumber,
-				Minute: defaultAutoLaunchMinuteNumber,
-				// @ts-ignore: JXA-ObjC
-				Weekday: $.NSNumber.numberWithInt(everyDayOfTheWeek.indexOf(newAutoLaunchDaysArray[0]) + 1)
-			}
-		else {
-			launchAgentDict.StartCalendarInterval = []
-
-			for (const thisNewAutoLaunchDay of newAutoLaunchDaysArray)
-				launchAgentDict.StartCalendarInterval.push({
-					Hour: newAutoLaunchHourNumber,
-					Minute: defaultAutoLaunchMinuteNumber,
-					// @ts-ignore: JXA-ObjC
-					Weekday: $.NSNumber.numberWithInt(everyDayOfTheWeek.indexOf(thisNewAutoLaunchDay) + 1)
-				})
-		}
-
-		if (!fileManager.fileExistsAtPath(launchAgentsPath))
-			// @ts-ignore: JXA-ObjC
-			fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(launchAgentsPath, true, {}, $())
-
-		let needsToWriteLaunchAgentPlistFile = true
-		if (fileManager.fileExistsAtPath(launchAgentPlistPath)) {
-			try {
-				// @ts-ignore: JXA-ObjC
-				const readCurrentLaunchAgentPlistFileError = $()
-				// @ts-ignore: JXA-ObjC
-				const currentLaunchAgentPlistContents = $.NSString.stringWithContentsOfFileEncodingError(launchAgentPlistPath, $.NSUTF8StringEncoding, readCurrentLaunchAgentPlistFileError).js
-				if (!readCurrentLaunchAgentPlistFileError.isNil()) throw new Error(readCurrentLaunchAgentPlistFileError.description.js)
-
-				// @ts-ignore: JXA-ObjC
-				const parseNewLaunchAgentPlistContentsError = $()
-				// @ts-ignore: JXA-ObjC
-				const newLaunchAgentPlistContents = $.NSString.alloc.initWithDataEncoding($.NSPropertyListSerialization.dataWithPropertyListFormatOptionsError($(launchAgentDict), $.NSPropertyListXMLFormat_v1_0, 0, parseNewLaunchAgentPlistContentsError), $.NSUTF8StringEncoding).js
-				if (!parseNewLaunchAgentPlistContentsError.isNil()) throw new Error(parseNewLaunchAgentPlistContentsError.description.js)
-
-				needsToWriteLaunchAgentPlistFile = (currentLaunchAgentPlistContents != newLaunchAgentPlistContents)
-			} catch (readLaunchAgentPlistError) {
-				debugLog('Read LaunchAgent Plist Error', readLaunchAgentPlistError)
-			}
-
-			if (needsToWriteLaunchAgentPlistFile) {
-				try {
-					app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`)
-				} catch (bootoutLaunchAgentError) {
-					debugLog('Bootout LaunchAgent Error', bootoutLaunchAgentError)
-				}
-
-				// @ts-ignore: JXA-ObjC
-				try { fileManager.removeItemAtPathError(launchAgentPlistPath, $()) } catch (ignoredError) { /* Ignore */ }
-			}
-		}
-
-		if (needsToWriteLaunchAgentPlistFile)
-			try {
-				// @ts-ignore: JXA-ObjC
-				const writeLaunchAgentToFileError = $()
-				// @ts-ignore: JXA-ObjC
-				if ($(launchAgentDict).writeToURLError($.NSURL.fileURLWithPath(launchAgentPlistPath), writeLaunchAgentToFileError))
-					try {
-						app.doShellScript(`/bin/launchctl bootstrap ${quoteForShell(`gui/${currentUserID}`)} ${quoteForShell(launchAgentPlistPath)}`)
-					} catch (bootstrapLaunchAgentError) {
-						debugLog('Bootstrap LaunchAgent Error', bootstrapLaunchAgentError)
-					}
-				else {
-					if (!writeLaunchAgentToFileError.isNil()) throw new Error(writeLaunchAgentToFileError.description.js)
-					throw new Error('Write LaunchAgent Dict to PLIST Failed')
-				}
-			} catch (writeLaunchAgentPlistError) {
-				debugLog('Write LaunchAgent PLIST Error', writeLaunchAgentPlistError)
-			}
-
+	if (newAutoLaunchDaysArray.length == 0) {
+		const currentAutoWakeSchedules = parseAutoWakePowerEventPreferences()
+		if (currentAutoWakeSchedules.On && (currentAutoWakeSchedules.On.type == 'wakepoweron') && (currentAutoWakeSchedules.On.minute == (defaultAutoLaunchMinute - 15)))
+			promptToRemovePowerSchedule()
+	} else {
 		if ((createDisplayScheduleFor(parseLaunchAgentSchedule()) != 'Never') && launchAgentIsDisabledOnVenturaOrNewer())
 			for ( ; ; ) {
 				if ((createDisplayScheduleFor(parseLaunchAgentSchedule()) == 'Never') || !launchAgentIsDisabledOnVenturaOrNewer()) break
@@ -3322,16 +3348,14 @@ ${createDisplayScheduleFor(latestAutoWakeSchedules.Off)}` : '')}` // Always incl
 						} catch (setPowerScheduleError) {
 							debugLog(`Set ${onScheduleName} Error`, setPowerScheduleError)
 
-							if (setPowerScheduleError.message != 'User canceled.') {
+							if (setPowerScheduleError.errorNumber !== -128) {
 								app.activate()
 								app.displayAlert(`${appName}: Failed to Set ${onScheduleName}`,
 									{
-										message: `${setPowerScheduleError}
+										message: `${setPowerScheduleError.message}
 
 ${JSON.stringify(setPowerScheduleError, Object.getOwnPropertyNames(setPowerScheduleError))}`,
-										as: 'critical',
-										buttons: ['OK'],
-										defaultButton: 1
+										as: 'critical'
 									}
 								)
 							}
@@ -3341,7 +3365,7 @@ ${JSON.stringify(setPowerScheduleError, Object.getOwnPropertyNames(setPowerSched
 						break
 					}
 				} catch (setPowerScheduleDialogError) {
-					if ((setPowerScheduleDialogError.message == 'User canceled.') && currentAutoWakeSchedules.On && (JSON.stringify(currentAutoWakeSchedules.On) == JSON.stringify(powerScheduleDict)))
+					if ((setPowerScheduleDialogError.errorNumber === -128) && currentAutoWakeSchedules.On && (JSON.stringify(currentAutoWakeSchedules.On) == JSON.stringify(powerScheduleDict)))
 						promptToRemovePowerSchedule()
 
 					break
@@ -3392,7 +3416,7 @@ If you choose to remove the ${removeScheduleName}, you will be prompted for fina
 						else
 							break
 					} catch (autoLoginNoteDialogError) {
-						if (autoLoginNoteDialogError.message == 'User canceled.') {
+						if (autoLoginNoteDialogError.errorNumber === -128) {
 							if (currentAutoWakeSchedules.On) {
 								promptToRemovePowerSchedule()
 
@@ -3408,7 +3432,7 @@ If you choose to remove the ${removeScheduleName}, you will be prompted for fina
 					if (shouldRevealLoginOptions) {
 						try {
 							// @ts-ignore: JXA
-							const systemPreferencesOrSettingsApp = Application(systemPreferencesOrSettingsName)
+							const systemPreferencesOrSettingsApp = Application('com.apple.systempreferences')
 							systemPreferencesOrSettingsApp.activate()
 
 							if (isVenturaOrNewer)
@@ -3418,9 +3442,11 @@ If you choose to remove the ${removeScheduleName}, you will be prompted for fina
 								// (which is why AppleScript "reveal" must still be used on previous versions of macOS).
 								// Also, the automatic login options are now visible in the main view instead of behind another section, so the "loginOptionsPref" anchor no longer exists and is not needed
 								// (but could still have been accessed by adding "?loginOptionsPref" to the end of the URL Scheme if it was needed).
+								// The old pane ID of "com.apple.preferences.users" still works on macOS 13 Ventura, but use the new ID of "com.apple.Users-Groups-Settings.extension" to make sure this is
+								// future-proof if the old pane ID ever stops working in a future version of macOS (https://github.com/bvanpeski/SystemPreferences/blob/main/macos_preferencepanes-Ventura.md#users--groups).
 
 								// @ts-ignore: JXA-ObjC
-								sharedWorkspace.openURL($.NSURL.URLWithString('x-apple.systempreferences:com.apple.preferences.users'))
+								sharedWorkspace.openURL($.NSURL.URLWithString('x-apple.systempreferences:com.apple.Users-Groups-Settings.extension'))
 							else
 								systemPreferencesOrSettingsApp.panes.byId('com.apple.preferences.users').anchors.byName('loginOptionsPref').reveal()
 
@@ -3488,16 +3514,14 @@ ${conflictingOnDisplaySchedule}` // Always include "appName" in admin prompt sin
 								} catch (removeConflictingPowerScheduleError) {
 									debugLog(`Remove Conflicting ${conflictingOffScheduleName} Error`, removeConflictingPowerScheduleError)
 
-									if (removeConflictingPowerScheduleError.message != 'User canceled.') {
+									if (removeConflictingPowerScheduleError.errorNumber !== -128) {
 										app.activate()
 										app.displayAlert(`${appName}: Failed to Remove Conflicting ${conflictingOffScheduleName}`,
 											{
 												message: `${removeConflictingPowerScheduleError.message}
 
 ${JSON.stringify(removeConflictingPowerScheduleError, Object.getOwnPropertyNames(removeConflictingPowerScheduleError))}`,
-												as: 'critical',
-												buttons: ['OK'],
-												defaultButton: 1
+												as: 'critical'
 											}
 										)
 									}
@@ -3519,21 +3543,10 @@ ${JSON.stringify(removeConflictingPowerScheduleError, Object.getOwnPropertyNames
 			app.displayAlert(`${appName}: Failed to Set Auto-Launch Schedule`,
 				{
 					message: 'Restart your computer and then try again.',
-					as: 'critical',
-					buttons: ['OK'],
-					defaultButton: 1
+					as: 'critical'
 				}
 			)
 		}
-	} else {
-		try { app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`) } catch (ignoredError) { /* Ignore */ }
-
-		// @ts-ignore: JXA-ObjC
-		try { fileManager.removeItemAtPathError(launchAgentPlistPath, $()) } catch (ignoredError) { /* Ignore */ }
-
-		const currentAutoWakeSchedules = parseAutoWakePowerEventPreferences()
-		if (currentAutoWakeSchedules.On && (currentAutoWakeSchedules.On.type == 'wakepoweron') && (currentAutoWakeSchedules.On.minute == (defaultAutoLaunchMinute - 15)))
-			promptToRemovePowerSchedule()
 	}
 }
 
@@ -3596,16 +3609,14 @@ ${createDisplayScheduleFor(latestAutoWakeSchedules.Off)}` : '')}` // Always incl
 					} catch (removePowerScheduleError) {
 						debugLog(`Remove ${removeScheduleName} Error`, removePowerScheduleError)
 
-						if (removePowerScheduleError.message != 'User canceled.') {
+						if (removePowerScheduleError.errorNumber !== -128) {
 							app.activate()
 							app.displayAlert(`${appName}: Failed to Remove ${removeScheduleName}`,
 								{
 									message: `${removePowerScheduleError.message}
 
 ${JSON.stringify(removePowerScheduleError, Object.getOwnPropertyNames(removePowerScheduleError))}`,
-									as: 'critical',
-									buttons: ['OK'],
-									defaultButton: 1
+									as: 'critical'
 								}
 							)
 						}
@@ -3691,6 +3702,8 @@ function parseLaunchAgentSchedule() {
 		if (!parseLaunchAgentPlistFileError.isNil()) throw new Error(parseLaunchAgentPlistFileError.description.js)
 		// @ts-ignore: JXA-ObjC
 		launchAgentScheduleArray = ObjC.deepUnwrap(launchAgentPlistDict.objectForKey('StartCalendarInterval'))
+		if (launchAgentScheduleArray === undefined) throw new Error('No "StartCalendarInterval" Specified')
+		if (typeof launchAgentScheduleArray != 'object') throw new Error('INVALID "StartCalendarInterval" Specified')
 	} catch (readLaunchAgentPlistError) {
 		debugLog('Read Schedule From LaunchAgent PLIST Error', readLaunchAgentPlistError)
 
@@ -3728,6 +3741,126 @@ function parseLaunchAgentSchedule() {
 	}
 
 	return returnAutoLaunchSchedule
+}
+
+function createLaunchAgentWithDaysAndHour(newAutoLaunchDaysArray, newAutoLaunchHour) {
+	if (newAutoLaunchDaysArray.length > 0) {
+		// NOTE: The following LaunchAgent dictionary specifies a "Launch IPSW Updater" script which is created and SIGNED by the "Build IPSW Updater.applescript" script.
+		// This script MUST be signed so that the "AssociatedBundleIdentifier" key can be used in macOS 13 Ventura so that the LaunchAgent is properly displayed as being for the "IPSW Updater" app.
+		// This is because the executable in the LaunchAgent MUST have a Code Signing Team ID that matches the Team ID of the app Bundle ID specified in the "AssociatedBundleIdentifiers" key (as described in https://developer.apple.com/documentation/servicemanagement/updating_helper_executables_from_earlier_versions_of_macos?language=objc#4065210).
+		// DO NOT want to have the LaunchAgent just run the "IPSW Updater" app binary directly because if the app is launched that way via the LaunchAgent and then the LaunchAgent is removed during that execution the app will be terminated immediately when "launchctl bootout" is run.
+		// That issue has always been avoided by using the "/usr/bin/open" binary to launch the app instead. But using "/usr/bin/open" directly in the LaunchAgent on macOS 13 Ventura makes it show as just running "open" from an unidentified developer in the new Login Items list, which may seem suspicious or confusing.
+		// Making this simple SIGNED "Launch IPSW Updater" script which just runs "/usr/bin/open" with the path to the app and then using the "AssociatedBundleIdentifiers" allows the LaunchAgent to be properly displayed as being for the "IPSW Updater" app.
+		// When on macOS 12 Monterey and older, the "AssociatedBundleIdentifiers" will just be ignored and the "Launch IPSW Updater" will function the same as if "/usr/bin/open" was directly specified with the path to the app in the LaunchAgent.
+		// Search for "AssociatedBundleIdentifiers" in the "Build IPSW Updater.applescript" script to see the "Launch IPSW Updater" script creation and signing code.
+
+		// ALSO NOTE: Manually creating the LaunchAgent plist in this way is considered to be a "Legacy LaunchAgent" as of macOS 13 Ventura: https://developer.apple.com/documentation/servicemanagement/updating_helper_executables_from_earlier_versions_of_macos?language=objc
+		// But, the new modern LaunchAgent and LaunchDaemon setup requires that the plist be pre-made and included within the app contents.
+		// That is not easily feasible for the needs of this use-case where the user can dynamically choose the day(s) and time that they want the app to be launched.
+		// It would techinically be possible pre-make and include every possible LaunchAgent plist and enable the correct one based on the users choice, but that would be hundreds of possible plists.
+		// Continuing to create a "Legacy LaunchAgent" by making the LaunchAgent plist dynamically based on the user input and using the "AssociatedBundleIdentifiers" key as described above to properly associate it with the "IPSW Updater" app makes the most sense as long as this "Legacy LaunchAgent" technique continues to work and be allowed by macOS.
+
+		const launchAgentDict = {
+			Label: bundleIdentifier,
+			Program: `${appPath}/Contents/Resources/Launch ${appName}`,
+			AssociatedBundleIdentifiers: bundleIdentifier,
+			RunAtLoad: false,
+			StandardOutPath: '/dev/null',
+			StandardErrorPath: '/dev/null'
+		}
+
+		// NOTE: If the following numbers for the LaunchAgent plist are left as JS ints,
+		// they will be set to "real" types instead of "integer" types when the
+		// dictionary is wrapped to an NSDictionary and written as a plist.
+		// So, explicitly wrapping them into NSNumbers solves that.
+
+		// @ts-ignore: JXA-ObjC
+		const newAutoLaunchHourNumber = $.NSNumber.numberWithInt(newAutoLaunchHour)
+		// @ts-ignore: JXA-ObjC
+		const defaultAutoLaunchMinuteNumber = $.NSNumber.numberWithInt(defaultAutoLaunchMinute)
+
+		if (JSON.stringify(newAutoLaunchDaysArray) == JSON.stringify(everyDayOfTheWeek))
+			launchAgentDict.StartCalendarInterval = {
+				Hour: newAutoLaunchHourNumber,
+				Minute: defaultAutoLaunchMinuteNumber
+			}
+		else if (newAutoLaunchDaysArray.length == 1)
+			launchAgentDict.StartCalendarInterval = {
+				Hour: newAutoLaunchHourNumber,
+				Minute: defaultAutoLaunchMinuteNumber,
+				// @ts-ignore: JXA-ObjC
+				Weekday: $.NSNumber.numberWithInt(everyDayOfTheWeek.indexOf(newAutoLaunchDaysArray[0]) + 1)
+			}
+		else {
+			launchAgentDict.StartCalendarInterval = []
+
+			for (const thisNewAutoLaunchDay of newAutoLaunchDaysArray)
+				launchAgentDict.StartCalendarInterval.push({
+					Hour: newAutoLaunchHourNumber,
+					Minute: defaultAutoLaunchMinuteNumber,
+					// @ts-ignore: JXA-ObjC
+					Weekday: $.NSNumber.numberWithInt(everyDayOfTheWeek.indexOf(thisNewAutoLaunchDay) + 1)
+				})
+		}
+
+		let needsToWriteLaunchAgentPlistFile = true
+		if (fileManager.fileExistsAtPath(launchAgentPlistPath)) {
+			try {
+				// @ts-ignore: JXA-ObjC
+				const readCurrentLaunchAgentPlistFileError = $()
+				// @ts-ignore: JXA-ObjC
+				const currentLaunchAgentPlistContents = $.NSString.stringWithContentsOfFileEncodingError(launchAgentPlistPath, $.NSUTF8StringEncoding, readCurrentLaunchAgentPlistFileError).js
+				if (!readCurrentLaunchAgentPlistFileError.isNil()) throw new Error(readCurrentLaunchAgentPlistFileError.description.js)
+
+				// @ts-ignore: JXA-ObjC
+				const parseNewLaunchAgentPlistContentsError = $()
+				// @ts-ignore: JXA-ObjC
+				const newLaunchAgentPlistContents = $.NSString.alloc.initWithDataEncoding($.NSPropertyListSerialization.dataWithPropertyListFormatOptionsError($(launchAgentDict), $.NSPropertyListXMLFormat_v1_0, 0, parseNewLaunchAgentPlistContentsError), $.NSUTF8StringEncoding).js
+				if (!parseNewLaunchAgentPlistContentsError.isNil()) throw new Error(parseNewLaunchAgentPlistContentsError.description.js)
+
+				needsToWriteLaunchAgentPlistFile = (currentLaunchAgentPlistContents != newLaunchAgentPlistContents)
+			} catch (readLaunchAgentPlistError) {
+				debugLog('Read LaunchAgent Plist Error', readLaunchAgentPlistError)
+			}
+
+			if (needsToWriteLaunchAgentPlistFile) {
+				try {
+					app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`)
+				} catch (bootoutLaunchAgentError) {
+					debugLog('Bootout LaunchAgent Error', bootoutLaunchAgentError)
+				}
+
+				// @ts-ignore: JXA-ObjC
+				try { fileManager.removeItemAtPathError(launchAgentPlistPath, $()) } catch (ignoredError) { /* Ignore */ }
+			}
+		} else if (!fileManager.fileExistsAtPath(launchAgentsPath))
+			// @ts-ignore: JXA-ObjC
+			fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(launchAgentsPath, true, {}, $())
+
+		if (needsToWriteLaunchAgentPlistFile)
+			try {
+				// @ts-ignore: JXA-ObjC
+				const writeLaunchAgentToFileError = $()
+				// @ts-ignore: JXA-ObjC
+				if ($(launchAgentDict).writeToURLError($.NSURL.fileURLWithPath(launchAgentPlistPath), writeLaunchAgentToFileError))
+					try {
+						app.doShellScript(`/bin/launchctl bootstrap ${quoteForShell(`gui/${currentUserID}`)} ${quoteForShell(launchAgentPlistPath)}`)
+					} catch (bootstrapLaunchAgentError) {
+						debugLog('Bootstrap LaunchAgent Error', bootstrapLaunchAgentError)
+					}
+				else {
+					if (!writeLaunchAgentToFileError.isNil()) throw new Error(writeLaunchAgentToFileError.description.js)
+					throw new Error('Write LaunchAgent Dict to PLIST Failed')
+				}
+			} catch (writeLaunchAgentPlistError) {
+				debugLog('Write LaunchAgent PLIST Error', writeLaunchAgentPlistError)
+			}
+	} else {
+		try { app.doShellScript(`/bin/launchctl bootout ${quoteForShell(`gui/${currentUserID}/${bundleIdentifier}`)}`) } catch (ignoredError) { /* Ignore */ }
+
+		// @ts-ignore: JXA-ObjC
+		try { fileManager.removeItemAtPathError(launchAgentPlistPath, $()) } catch (ignoredError) { /* Ignore */ }
+	}
 }
 
 function launchAgentIsDisabledOnVenturaOrNewer() {
@@ -3847,17 +3980,17 @@ function revealPowerScheduleInSystemPreferences() {
 		if (isBigSurOrNewer) { // On macOS 11 Big Sur and newer, separate Battery or Energy Saver preferences panes exist for laptops (with batteries) vs desktops.
 			if (macHasBattery()) {
 				powerSchedulePaneID = 'com.apple.preference.battery'
-				powerScheduleAnchor = 'schedule'// Notice this anchor has a lowercased "S" for this new Battery pane.
+				powerScheduleAnchor = 'schedule'// Notice this anchor has a lowercased "s" for this new Battery pane.
 			} else if (isMontereyOrNewer) {
 				// In macOS 12 Monterey, the Energy Saver pane for desktops was re-designed to match the style of the Battery pane and has a new pane ID.
 				powerSchedulePaneID = 'com.apple.preferences.EnergySaverPrefPane'
-				powerScheduleAnchor = 'schedule'// Notice this anchor has a lowercased "S" for this new Energy Saver pane.
+				powerScheduleAnchor = 'schedule'// Notice this anchor has a lowercased "s" for this new Energy Saver pane.
 			}
 		}
 
 		try {
 			// @ts-ignore: JXA
-			const systemPreferencesOrSettingsApp = Application(systemPreferencesOrSettingsName)
+			const systemPreferencesOrSettingsApp = Application('com.apple.systempreferences')
 			systemPreferencesOrSettingsApp.activate()
 			systemPreferencesOrSettingsApp.panes.byId(powerSchedulePaneID).anchors.byName(powerScheduleAnchor).reveal()
 			systemPreferencesOrSettingsApp.activate()
