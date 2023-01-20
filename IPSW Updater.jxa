@@ -28,15 +28,12 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2022.12.14-1'
+const appVersion = '2023.1.19-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
 // @ts-ignore: JXA-ObjC
 ObjC.import('Security') // For "SecStaticCodeCheckValidity" and other functions for code signature validation.
-
-// @ts-ignore: JXA-ObjC
-ObjC.bindFunction('CFMakeCollectable', ['id', ['void *']]) // See https://github.com/JXA-Cookbook/JXA-Cookbook/issues/13#issuecomment-174820487 for info about "CFMakeCollectable" (and also the "cfRefToNSObjectIfNeeded" function below).
 
 // @ts-ignore: "Application.currentApplication()" is set to "a" and "a.includeStandardAdditions" is set to "true" in "main.scpt" which runs this script via "exec()".
 const app = a
@@ -56,22 +53,24 @@ const fileManager = $.NSFileManager.defaultManager
 if (!fileManager.fileExistsAtPath(`${appPath}/Contents/MacOS/${bundleExecutableName}`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Scripts/main.scpt`) || !fileManager.fileExistsAtPath(`${appPath}/Contents/Resources/Launch ${bundleExecutableName}`)) {
 	debugLog('App Check Error', appPath)
 
-	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
-		try {
-			app.activate()
-			app.displayAlert(`${appName}: App Check Error`,
-				{
-					message: `${appName} must be run as an application.`,
-					as: 'critical',
-					buttons: ['Quit', `Re-Download “${appName}”`],
-					cancelButton: 1,
-					defaultButton: 2
-				}
-			)
+	while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
+		// @ts-ignore: JXA
+		delay(15)
 
-			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
-		} catch (ignoredError) { /* Ignore */ }
-	}
+	try {
+		app.activate()
+		app.displayAlert(`${appName}: App Check Error`,
+			{
+				message: `${appName} must be run as an application.`,
+				as: 'critical',
+				buttons: ['Quit', `Re-Download “${appName}”`],
+				cancelButton: 1,
+				defaultButton: 2
+			}
+		)
+
+		app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+	} catch (ignoredError) { /* Ignore */ }
 
 	app.quit()
 }
@@ -81,26 +80,28 @@ const intendedBundleIdentifier = `org.freegeek.${bundleExecutableName.replace(/ 
 if (bundleIdentifier != intendedBundleIdentifier) {
 	debugLog('Incorrect Bundle Identifier Error', bundleIdentifier)
 
-	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
-		try {
-			app.activate()
-			app.displayAlert(`${appName}: Bundle Identifier Error`,
-				{
-					message: `Intended Bundle Identifier:
+	while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
+		// @ts-ignore: JXA
+		delay(15)
+
+	try {
+		app.activate()
+		app.displayAlert(`${appName}: Bundle Identifier Error`,
+			{
+				message: `Intended Bundle Identifier:
 ${intendedBundleIdentifier}
 
 Actual Bundle Identifier:
 ${bundleIdentifier}`,
-					as: 'critical',
-					buttons: ['Quit', `Re-Download “${appName}”`],
-					cancelButton: 1,
-					defaultButton: 2
-				}
-			)
+				as: 'critical',
+				buttons: ['Quit', `Re-Download “${appName}”`],
+				cancelButton: 1,
+				defaultButton: 2
+			}
+		)
 
-			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
-		} catch (ignoredError) { /* Ignore */ }
-	}
+		app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+	} catch (ignoredError) { /* Ignore */ }
 
 	app.quit()
 }
@@ -109,26 +110,28 @@ const infoDictVersion = appBundle.objectForInfoDictionaryKey('CFBundleShortVersi
 if (infoDictVersion != appVersion) {
 	debugLog(`Incorrect App Version Error: ${infoDictVersion} != ${appVersion}`)
 
-	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
-		try {
-			app.activate()
-			app.displayAlert(`${appName}: App Version Error`,
-				{
-					message: `Intended App Version:
+	while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
+		// @ts-ignore: JXA
+		delay(15)
+
+	try {
+		app.activate()
+		app.displayAlert(`${appName}: App Version Error`,
+			{
+				message: `Intended App Version:
 ${appVersion}
 
 Actual App Version:
 ${infoDictVersion}`,
-					as: 'critical',
-					buttons: ['Quit', `Re-Download “${appName}”`],
-					cancelButton: 1,
-					defaultButton: 2
-				}
-			)
+				as: 'critical',
+				buttons: ['Quit', `Re-Download “${appName}”`],
+				cancelButton: 1,
+				defaultButton: 2
+			}
+		)
 
-			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
-		} catch (ignoredError) { /* Ignore */ }
-	}
+		app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+	} catch (ignoredError) { /* Ignore */ }
 
 	app.quit()
 }
@@ -148,22 +151,24 @@ try {
 } catch (codeSignatureValidationError) {
 	debugLog('Code Signature Error', codeSignatureValidationError)
 
-	if (macIsAwakeAndUnlocked()) { // Just quit if Mac IS NOT awake and unlocked since AppleScript dialogs will timeout early if Mac is asleep when it's displayed.
-		try {
-			app.activate()
-			app.displayAlert(`${appName}: Code Signature Error`,
-				{
-					message: codeSignatureValidationError.message,
-					as: 'critical',
-					buttons: ['Quit', `Re-Download “${appName}”`],
-					cancelButton: 1,
-					defaultButton: 2
-				}
-			)
+	while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
+		// @ts-ignore: JXA
+		delay(15)
 
-			app.doShellScript('/usr/bin/open https://ipsw.app/download/')
-		} catch (ignoredError) { /* Ignore */ }
-	}
+	try {
+		app.activate()
+		app.displayAlert(`${appName}: Code Signature Error`,
+			{
+				message: codeSignatureValidationError.message,
+				as: 'critical',
+				buttons: ['Quit', `Re-Download “${appName}”`],
+				cancelButton: 1,
+				defaultButton: 2
+			}
+		)
+
+		app.doShellScript('/usr/bin/open https://ipsw.app/download/')
+	} catch (ignoredError) { /* Ignore */ }
 
 	app.quit()
 }
@@ -233,7 +238,7 @@ const sharedWorkspace = $.NSWorkspace.sharedWorkspace
 const settingsOrPreferencesName = (isVenturaOrNewer ? 'Settings' : 'Preferences')
 const systemPreferencesOrSettingsName = `System ${settingsOrPreferencesName}`
 
-const curlPIDs = [] // Save all CURL PIDs to kill them all before quitting just in case.
+const curlPIDs = [] // Save CURL PIDs as they are spawned to be able kill them all when an error is caught or before quitting just in case any are left behind before being removed from this list after they are known to not be running anymore.
 
 // @ts-ignore: JXA-ObjC
 const applicationSupportFolder = `${fileManager.URLsForDirectoryInDomains($.NSApplicationSupportDirectory, $.NSUserDomainMask).firstObject.path.js}/${appName}`
@@ -715,11 +720,11 @@ else {
 					// @ts-ignore: JXA-ObjC
 					fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(temporaryFilesFolder, true, {}, $())
 
-				const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -L ${quoteForShell(`${appUpdatesJsonURL}&just_updated=1`)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdatesJsonProgressOutputFile)} 2>&1 & echo $!`)
+				const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -fL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=1`)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdatesJsonProgressOutputFile)} 2>&1 & echo $!`)
 				curlPIDs.push(downloadAppUpdatesJsonPID)
 
 				try {
-					while (app.doShellScript(`/bin/ps -p ${downloadAppUpdatesJsonPID} > /dev/null 2>&1; echo $?`) == 0)
+					while (app.doShellScript(`kill -0 ${downloadAppUpdatesJsonPID}; echo $?`) == 0)
 						// @ts-ignore: JXA
 						delay(0.25)
 				} catch (waitingForAppUpdatesJsonError) {
@@ -729,6 +734,8 @@ else {
 
 					throw waitingForAppUpdatesJsonError
 				}
+
+				curlPIDs.splice(curlPIDs.indexOf(downloadAppUpdatesJsonPID), 1)
 
 				// @ts-ignore: JXA-ObjC
 				const appUpdatesInfo = JSON.parse($.NSString.stringWithContentsOfFileEncodingError(appUpdatesJsonFilePath, $.NSUTF8StringEncoding, readAppUpdatesFileError).js)
@@ -801,7 +808,7 @@ ${newVersionReleaseNotes}`,
 				// But, even if Mac IS NOT awake and unlocked still do the "curl" call to "appUpdatesJsonURL" with the new version parameters,
 				// (but do not wait for it to finish or save the output) just so that the successful app update is still saved in the server log.
 
-				app.doShellScript(`/usr/bin/curl -m 5 -sL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=2`)} > /dev/null 2>&1 &`) // "just_updated=2" indicates an update when the Mac is asleep or locked (while "just_updated=1" indicates updated while awake an unlocked).
+				app.doShellScript(`/usr/bin/curl -m 5 -sfL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=2`)} > /dev/null 2>&1 &`) // "just_updated=2" indicates an update when the Mac is asleep or locked (while "just_updated=1" indicates updated while awake an unlocked).
 			} catch (ignoredError) { /* Ignore */ }
 	} else {
 		// @ts-ignore: JXA
@@ -1107,13 +1114,16 @@ try {
 	for (const thisFirmwaresInfoURL of firmwaresInfoURLs) {
 		debugLog('Downloading Firmwares JSON', thisFirmwaresInfoURL)
 
-		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+		if (curlPIDs.length > 0) {
+			try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+			curlPIDs.splice(0, curlPIDs.length)
+		}
 
-		const downloadFirmwaresInfoPID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L ${quoteForShell(thisFirmwaresInfoURL)} -o ${quoteForShell(allFirmwaresFilePath)} > ${quoteForShell(firmwareProgressOutputFile)} 2>&1 & echo $!`)
+		const downloadFirmwaresInfoPID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -fL ${quoteForShell(thisFirmwaresInfoURL)} -o ${quoteForShell(allFirmwaresFilePath)} > ${quoteForShell(firmwareProgressOutputFile)} 2>&1 & echo $!`)
 		curlPIDs.push(downloadFirmwaresInfoPID)
 
 		try {
-			while (app.doShellScript(`/bin/ps -p ${downloadFirmwaresInfoPID} > /dev/null 2>&1; echo $?`) == 0)
+			while (app.doShellScript(`kill -0 ${downloadFirmwaresInfoPID}; echo $?`) == 0)
 				// @ts-ignore: JXA
 				delay(0.25)
 		} catch (waitingForDownloadError) {
@@ -1123,6 +1133,8 @@ try {
 
 			throw waitingForDownloadError
 		}
+
+		curlPIDs.splice(curlPIDs.indexOf(downloadFirmwaresInfoPID), 1)
 
 		setProgressStopButtonEnabled(false)
 
@@ -1281,7 +1293,7 @@ try {
 //debugDialog(unsignedFirmwares)
 
 let oldManagedFirmware = getPreference('ManagedFirmwares', 'dict')
-if ((typeof oldManagedFirmware !== 'object') || Array.isArray(oldManagedFirmware))
+if (!(oldManagedFirmware instanceof Object) || Array.isArray(oldManagedFirmware))
 	oldManagedFirmware = {}
 
 const sortedUniqueDeviceNames = Object.keys(uniqueDeviceNamesForFirmwareFileNames).sort()
@@ -1321,10 +1333,16 @@ if (uniqueFirmwaresCount > 0) {
 📲 ${firmwaresNeedingUpdateSoFarCount} Available Update${((firmwaresNeedingUpdateSoFarCount == 1) ? '' : 's')} Found for IPSW Firmware Files So Far…`
 
 			const thisProductType = uniqueFirmwares[thisFirmwareFileName].productType
+			const thisITunesSoftwareUpdatesFilePath = `${uniqueFirmwares[thisFirmwareFileName].productSoftwareUpdatesFolder}/${thisFirmwareFileName}`
 			if (thisProductType != 'Unknown' && !excludedProducts.includes(thisProductType) &&
 				// @ts-ignore: JXA-ObjC
 				(thisProductType.includes('HomePod') || thisProductType.includes('Mac') || ($(uniqueFirmwares[thisFirmwareFileName].version).compareOptions(includedVersions.toString(), $.NSNumericSearch) >= 0)) &&
-				(uniqueFirmwares[thisFirmwareFileName].sha1sum != calculateChecksumForFile(`${uniqueFirmwares[thisFirmwareFileName].productSoftwareUpdatesFolder}/${thisFirmwareFileName}`))) {
+				(
+					!fileManager.fileExistsAtPath(thisITunesSoftwareUpdatesFilePath) ||
+					// @ts-ignore: JXA-ObjC
+					(uniqueFirmwares[thisFirmwareFileName].size != fileManager.attributesOfItemAtPathError(thisITunesSoftwareUpdatesFilePath, $()).objectForKey('NSFileSize').js) ||
+					(uniqueFirmwares[thisFirmwareFileName].sha1sum != calculateChecksumForFile(thisITunesSoftwareUpdatesFilePath))
+				)) {
 					firmwaresNeedingUpdate[thisFirmwareFileName] = uniqueFirmwares[thisFirmwareFileName]
 					totalFirmwaresToUpdateSize += firmwaresNeedingUpdate[thisFirmwareFileName].size
 			}
@@ -1374,34 +1392,53 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 	try {
 		setProgressStopButtonEnabled(false)
 
-		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+		if (curlPIDs.length > 0) {
+			try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+			curlPIDs.splice(0, curlPIDs.length)
+		}
 
 		actualProgressCount ++
 		const progressBeforeDownload = Progress.completedUnitCount
 
 		const thisDisplayDeviceNames = firmwaresNeedingUpdate[thisFirmwareFileName].displayDeviceNames
-		const iTunesSoftwareUpdatesFilePath = `${firmwaresNeedingUpdate[thisFirmwareFileName].productSoftwareUpdatesFolder}/${thisFirmwareFileName}`
+
+		const thisProductSoftwareUpdatesFolder = firmwaresNeedingUpdate[thisFirmwareFileName].productSoftwareUpdatesFolder
+		const iTunesSoftwareUpdatesFilePath = `${thisProductSoftwareUpdatesFolder}/${thisFirmwareFileName}`
+
+		const thisFirmwareFileNameDisplay = `${((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)}`
+
+		const intendedFirmwareFileSize = firmwaresNeedingUpdate[thisFirmwareFileName].size
+		const intendedFirmwareFileSizeDisplay = formatBytes(intendedFirmwareFileSize)
+
+		const intendedFirmwareSHA1Sum = firmwaresNeedingUpdate[thisFirmwareFileName].sha1sum
 
 		wakeMacUp()
 
 		Progress.description = `${actualProgressCount} of ${firmwaresNeedingUpdateCount}: ${thisDisplayDeviceNames}`
 		Progress.additionalDescription = `
-📲 Downloading: ${((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)}
+📲 Downloading: ${thisFirmwareFileNameDisplay}
 
-🔄 Initializing ${formatBytes(firmwaresNeedingUpdate[thisFirmwareFileName].size)} Download…`
+🔄 Initializing ${intendedFirmwareFileSizeDisplay} Download…`
 
 		// @ts-ignore: JXA
 		delay(0.1)
 
 		setProgressStopButtonEnabled(true)
 
-		if (firmwaresNeedingUpdate[thisFirmwareFileName].sha1sum != calculateChecksumForFile(iTunesSoftwareUpdatesFilePath)) {
+		// @ts-ignore: JXA-ObjC
+		if (!fileManager.fileExistsAtPath(iTunesSoftwareUpdatesFilePath) || (intendedFirmwareFileSize != fileManager.attributesOfItemAtPathError(iTunesSoftwareUpdatesFilePath, $()).objectForKey('NSFileSize').js) || (intendedFirmwareSHA1Sum != calculateChecksumForFile(iTunesSoftwareUpdatesFilePath))) {
 			const downloadFirmwareFilePath = `${temporaryFilesFolder}/${thisFirmwareFileName}-download`
 			firmwareProgressOutputFile = `${temporaryFilesFolder}/${thisFirmwareFileName}-progress`
 
-			let maxDownloadAttempts = 2
+			let maxDownloadAttempts = 3
 			for (let downloadAttempt = 1; downloadAttempt <= maxDownloadAttempts; downloadAttempt ++) {
 				setProgressStopButtonEnabled(true)
+
+				if (downloadAttempt > 1)
+					Progress.additionalDescription = `
+📲 Downloading: ${thisFirmwareFileNameDisplay}
+
+🔄 Re-initializing ${intendedFirmwareFileSizeDisplay} Download…`
 
 				Progress.completedUnitCount = progressBeforeDownload
 
@@ -1416,142 +1453,148 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 						// @ts-ignore: JXA-ObjC
 						const availableCapacities = ObjC.deepUnwrap($.NSURL.fileURLWithPath(temporaryFilesFolder).resourceValuesForKeysError(['NSURLVolumeAvailableCapacityForImportantUsageKey', 'NSURLVolumeAvailableCapacityKey'], $()))
 						const freeSpaceWithPadding = ((availableCapacities.NSURLVolumeAvailableCapacityForImportantUsageKey || availableCapacities.NSURLVolumeAvailableCapacityKey) - 10000000000) // Always leave at least 10 GB available on the system.
-						hasFreeSpaceToDownloadFile = (freeSpaceWithPadding >= firmwaresNeedingUpdate[thisFirmwareFileName].size)
+						hasFreeSpaceToDownloadFile = (freeSpaceWithPadding >= intendedFirmwareFileSize)
 					} catch (ignoredError) {
 						hasFreeSpaceToDownloadFile = true
 					}
 
-					if (hasFreeSpaceToDownloadFile) {
-						try {
-							if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+					if (!hasFreeSpaceToDownloadFile) {
+						maxDownloadAttempts = 1
+						throw new Error(`Not Enough Free Space to Download ${intendedFirmwareFileSizeDisplay} IPSW Firmware File`)
+					}
 
-							const downloadFirmwarePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L ${quoteForShell(firmwaresNeedingUpdate[thisFirmwareFileName].url)} -o ${quoteForShell(downloadFirmwareFilePath)} > ${quoteForShell(firmwareProgressOutputFile)} 2>&1 & echo $!`)
-							curlPIDs.push(downloadFirmwarePID)
-							debugLog(`Download ${thisFirmwareFileName} CURL PID`, downloadFirmwarePID)
-
-							try { app.doShellScript(`/usr/bin/caffeinate -dimsu -w ${downloadFirmwarePID} > /dev/null 2>&1 &`) } catch (ignoredError) { /* Ignore */ } // Prevent this Mac from Sleeping while CURL is running.
-
-							// @ts-ignore: JXA
-							delay(1)
-
-							for (let delaySeconds = 0; delaySeconds < 5; delaySeconds ++)
-								if (!fileManager.fileExistsAtPath(firmwareProgressOutputFile))
-									// @ts-ignore: JXA
-									delay(1)
-								else
-									break
-
-							let tickTock = true
-							while (app.doShellScript(`/bin/ps -p ${downloadFirmwarePID} > /dev/null 2>&1; echo $?`) == 0) {
-								let rawProgressSpeed = '0'
-								try {
-									// @ts-ignore: JXA-ObjC
-									rawProgressSpeed = $.NSString.stringWithContentsOfFileEncodingError(firmwareProgressOutputFile, $.NSUTF8StringEncoding, $()).js.split(/\n|\r/).slice(-1)[0].split(' ').slice(-1)[0]
-								} catch (readProgressError) {
-									if (readProgressError.errorNumber === -128)
-										throw readProgressError
-								}
-
-								let downloadedFileSize = 0
-								try {
-									if (fileManager.fileExistsAtPath(downloadFirmwareFilePath))
-										// @ts-ignore: JXA-ObjC
-										downloadedFileSize = fileManager.attributesOfItemAtPathError(downloadFirmwareFilePath, $()).objectForKey('NSFileSize').js
-								} catch (downloadedFileSizeError) {
-									if (downloadedFileSizeError.errorNumber === -128)
-										throw downloadedFileSizeError
-								}
-
-								let progressSpeedNumber = 0
-								const lastSpeedChar = rawProgressSpeed.charAt(rawProgressSpeed.length - 1)
-								if (lastSpeedChar == 'k') {
-									rawProgressSpeed.slice(-1)
-									progressSpeedNumber = (parseInt(rawProgressSpeed) * 1000)
-								} else if (lastSpeedChar == 'M') {
-									rawProgressSpeed.slice(-1)
-									progressSpeedNumber = (parseFloat(rawProgressSpeed) * 1000000)
-								} else
-									progressSpeedNumber = parseInt(rawProgressSpeed)
-
-								if (isNaN(progressSpeedNumber)) progressSpeedNumber = 0
-								const progressSpeedString = `${formatBytes(progressSpeedNumber, 1)}/sec`
-								Progress.completedUnitCount = (progressBeforeDownload + (downloadedFileSize / 100))
-								const hourGlass = (tickTock ? '⏳' : '⌛️')
-								tickTock = !tickTock
-
-								const progressPercentage = ((downloadedFileSize / firmwaresNeedingUpdate[thisFirmwareFileName].size) * 100).toFixed(1).replace('.0', '')
-
-								Progress.additionalDescription = `
-📲 Downloading: ${((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)}
-
-${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize)} of ${formatBytes(firmwaresNeedingUpdate[thisFirmwareFileName].size)} @ ${progressSpeedString}`
-								// @ts-ignore: JXA
-								delay(1)
-							}
-						} catch (waitingForDownloadError) {
-							setProgressStopButtonEnabled(false)
-
-							debugLog('Waiting for Download Error', waitingForDownloadError)
-
-							if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
-
-							throw waitingForDownloadError
+					try {
+						if (curlPIDs.length > 0) {
+							try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+							curlPIDs.splice(0, curlPIDs.length)
 						}
 
-						let downloadedFileSize = 0
-						try {
-							if (fileManager.fileExistsAtPath(downloadFirmwareFilePath))
+						const downloadFirmwarePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -C - -fL ${quoteForShell(firmwaresNeedingUpdate[thisFirmwareFileName].url)} -o ${quoteForShell(downloadFirmwareFilePath)} > ${quoteForShell(firmwareProgressOutputFile)} 2>&1 & echo $!`)
+						// NOTE: Downloads will be attempted 3 times, and the "curl" option "-C -" allows failed downloads from a previous to be resumed without losing previous attempt progress (this is assuming a previous attempt failed in some way that did not cause corruption, but if there is corruption the file will not pass the checksum verification and will not be used).
+
+						curlPIDs.push(downloadFirmwarePID)
+						debugLog(`Download ${thisFirmwareFileName} - CURL PID`, downloadFirmwarePID)
+
+						try { app.doShellScript(`/usr/bin/caffeinate -dimsu -w ${downloadFirmwarePID} > /dev/null 2>&1 &`) } catch (ignoredError) { /* Ignore */ } // Prevent this Mac from Sleeping while CURL is running.
+
+						// @ts-ignore: JXA
+						delay(1)
+
+						for (let delaySeconds = 0; delaySeconds < 5; delaySeconds ++)
+							if (!fileManager.fileExistsAtPath(firmwareProgressOutputFile))
+								// @ts-ignore: JXA
+								delay(1)
+							else
+								break
+
+						let tickTock = true
+						while (app.doShellScript(`kill -0 ${downloadFirmwarePID}; echo $?`) == 0) {
+							let rawProgressSpeed = '0'
+							try {
 								// @ts-ignore: JXA-ObjC
-								downloadedFileSize = fileManager.attributesOfItemAtPathError(downloadFirmwareFilePath, $()).objectForKey('NSFileSize').js
-						} catch (ignoredError) { /* Ignore */ }
+								rawProgressSpeed = $.NSString.stringWithContentsOfFileEncodingError(firmwareProgressOutputFile, $.NSUTF8StringEncoding, $()).js.split(/\n|\r/).slice(-1)[0].split(' ').slice(-1)[0]
+							} catch (readProgressError) {
+								if (readProgressError.errorNumber === -128)
+									throw readProgressError
+							}
 
-						if (downloadedFileSize > 0) {
-							setProgressStopButtonEnabled(false)
+							// @ts-ignore: JXA-ObjC
+							const downloadedFileSize = (fileManager.fileExistsAtPath(downloadFirmwareFilePath) ? fileManager.attributesOfItemAtPathError(downloadFirmwareFilePath, $()).objectForKey('NSFileSize').js : 0)
 
-							Progress.completedUnitCount = progressBeforeDownload + (downloadedFileSize / 100)
-							totalDownloadedSize += downloadedFileSize
+							let progressSpeedNumber = 0
+							const lastSpeedChar = rawProgressSpeed.charAt(rawProgressSpeed.length - 1)
+							if (lastSpeedChar == 'k') {
+								rawProgressSpeed.slice(-1)
+								progressSpeedNumber = (parseInt(rawProgressSpeed) * 1000)
+							} else if (lastSpeedChar == 'M') {
+								rawProgressSpeed.slice(-1)
+								progressSpeedNumber = (parseFloat(rawProgressSpeed) * 1000000)
+							} else
+								progressSpeedNumber = parseInt(rawProgressSpeed)
+
+							if (isNaN(progressSpeedNumber)) progressSpeedNumber = 0
+							const progressSpeedString = `${formatBytes(progressSpeedNumber, 1)}/sec`
+							Progress.completedUnitCount = (progressBeforeDownload + (downloadedFileSize / 100))
+							const hourGlass = (tickTock ? '⏳' : '⌛️')
+							tickTock = !tickTock
+
+							const progressPercentage = ((downloadedFileSize / intendedFirmwareFileSize) * 100).toFixed(1).replace('.0', '')
 
 							Progress.additionalDescription = `
-📲 Downloaded: ${((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)}
+📲 Downloading: ${thisFirmwareFileNameDisplay}
+
+${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize)} of ${intendedFirmwareFileSizeDisplay} @ ${progressSpeedString}`
+							// @ts-ignore: JXA
+							delay(1)
+						}
+
+						curlPIDs.splice(curlPIDs.indexOf(downloadFirmwarePID), 1)
+					} catch (waitingForDownloadError) {
+						setProgressStopButtonEnabled(false)
+
+						debugLog('Waiting for Download Error', waitingForDownloadError)
+
+						if (curlPIDs.length > 0) {
+							try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+							curlPIDs.splice(0, curlPIDs.length)
+						}
+
+						throw waitingForDownloadError
+					}
+
+					if (!fileManager.fileExistsAtPath(downloadFirmwareFilePath))
+						throw new Error('No IPSW Firmware File Downloaded')
+
+					// @ts-ignore: JXA-ObjC
+					const downloadedFileSize = fileManager.attributesOfItemAtPathError(downloadFirmwareFilePath, $()).objectForKey('NSFileSize').js
+
+					setProgressStopButtonEnabled(false)
+
+					Progress.completedUnitCount = progressBeforeDownload + (downloadedFileSize / 100)
+
+					Progress.additionalDescription = `
+📲 Downloaded: ${thisFirmwareFileNameDisplay}
 
 🔍 Verifying and Moving IPSW Firmware File…`
-							// @ts-ignore: JXA
-							delay(0.25)
+					// @ts-ignore: JXA
+					delay(0.25)
 
-							const downloadedFileSHA1Sum = calculateChecksumForFile(downloadFirmwareFilePath)
+					if (intendedFirmwareFileSize != downloadedFileSize)
+						throw new Error(`Downloaded File Size (${downloadedFileSize}) != Intended Size (${intendedFirmwareFileSize})`)
 
-							if (firmwaresNeedingUpdate[thisFirmwareFileName].sha1sum == downloadedFileSHA1Sum) {
-								const thisProductSoftwareUpdatesFolder = firmwaresNeedingUpdate[thisFirmwareFileName].productSoftwareUpdatesFolder
+					const downloadedFileSHA1Sum = calculateChecksumForFile(downloadFirmwareFilePath)
+					if (intendedFirmwareSHA1Sum != downloadedFileSHA1Sum)
+						throw new Error(`Downloaded File Checksum (${downloadedFileSHA1Sum}) != Intended Checksum (${intendedFirmwareSHA1Sum})`)
 
-								if (fileManager.fileExistsAtPath(iTunesSoftwareUpdatesFilePath))
-									// @ts-ignore: JXA-ObjC
-									try { fileManager.removeItemAtPathError(iTunesSoftwareUpdatesFilePath, $()) } catch (ignoredError) { /* Ignore */ }
-								else if (!fileManager.fileExistsAtPath(thisProductSoftwareUpdatesFolder))
-									// @ts-ignore: JXA-ObjC
-									fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(thisProductSoftwareUpdatesFolder, true, {}, $())
+					if (fileManager.fileExistsAtPath(iTunesSoftwareUpdatesFilePath))
+						// @ts-ignore: JXA-ObjC
+						try { fileManager.removeItemAtPathError(iTunesSoftwareUpdatesFilePath, $()) } catch (ignoredError) { /* Ignore */ }
+					else if (!fileManager.fileExistsAtPath(thisProductSoftwareUpdatesFolder))
+						// @ts-ignore: JXA-ObjC
+						fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(thisProductSoftwareUpdatesFolder, true, {}, $())
 
-								// @ts-ignore: JXA-ObjC
-								try { fileManager.moveItemAtPathToPathError(downloadFirmwareFilePath, iTunesSoftwareUpdatesFilePath, $()) } catch (ignoredError) { /* Ignore */ }
+					// @ts-ignore: JXA-ObjC
+					try { fileManager.moveItemAtPathToPathError(downloadFirmwareFilePath, iTunesSoftwareUpdatesFilePath, $()) } catch (ignoredError) { /* Ignore */ }
 
-								downloadedFiles[thisFirmwareFileName] = {
-									Devices: thisDisplayDeviceNames,
-									Version: firmwaresNeedingUpdate[thisFirmwareFileName].version,
-									Size: formatBytes(downloadedFileSize)
-								}
+					if (!fileManager.fileExistsAtPath(iTunesSoftwareUpdatesFilePath))
+						throw new Error(`Failed to Move IPSW Firmware File to ${thisProductSoftwareUpdatesFolder}`)
 
-								break
-							} else
-								throw new Error(`Downloaded File Checksum (${downloadedFileSHA1Sum}) != Intended Checksum (${firmwaresNeedingUpdate[thisFirmwareFileName].sha1sum})`)
-						} else
-							throw new Error(`No File Downloaded`)
-					} else {
-						maxDownloadAttempts = 1
-						throw new Error(`Not Enough Free Space to Download ${formatBytes(firmwaresNeedingUpdate[thisFirmwareFileName].size)} IPSW Firmware File`)
+					totalDownloadedSize += downloadedFileSize
+
+					downloadedFiles[thisFirmwareFileName] = {
+						Devices: thisDisplayDeviceNames,
+						Version: firmwaresNeedingUpdate[thisFirmwareFileName].version,
+						Size: formatBytes(downloadedFileSize)
 					}
+
+					break
 				} catch (firmwareDownloadError) {
 					setProgressStopButtonEnabled(false)
 
-					if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+					if (curlPIDs.length > 0) {
+						try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+						curlPIDs.splice(0, curlPIDs.length)
+					}
 
 					if (!userDidCancel) userDidCancel = (firmwareDownloadError.errorNumber === -128)
 
@@ -1566,10 +1609,13 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 					firmwareDownloadErrorMessage = firmwareDownloadErrorMessage.replace(/\n|\r/g, '')
 
-					// @ts-ignore: JXA-ObjC
-					try { fileManager.removeItemAtPathError(downloadFirmwareFilePath, $()) } catch (ignoredError) { /* Ignore */ }
-
 					debugLog(`Error Downloading Firmware (${thisFirmwareFileName}) Attempt ${downloadAttempt} of ${maxDownloadAttempts}: ${firmwareDownloadErrorMessage}`, firmwareDownloadError)
+
+					if ((downloadAttempt == maxDownloadAttempts) || !firmwareDownloadError.message.includes('!= Intended Size'))
+						// @ts-ignore: JXA-ObjC
+						try { fileManager.removeItemAtPathError(downloadFirmwareFilePath, $()) } catch (ignoredError) { /* Ignore */ }
+					else
+						debugLog('NOT Deleting Incomplete Firmware Download to Allow Next Attempt to Resume')
 
 					if (userDidCancel) break // Break before errors get saved in Updates Log when user canceled.
 
@@ -1584,11 +1630,12 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 		setProgressStopButtonEnabled(false)
 
-		if (firmwaresNeedingUpdate[thisFirmwareFileName].sha1sum == calculateChecksumForFile(iTunesSoftwareUpdatesFilePath)) {
+		// @ts-ignore: JXA-ObjC
+		if (fileManager.fileExistsAtPath(iTunesSoftwareUpdatesFilePath) && (intendedFirmwareFileSize == fileManager.attributesOfItemAtPathError(iTunesSoftwareUpdatesFilePath, $()).objectForKey('NSFileSize').js) && (intendedFirmwareSHA1Sum == calculateChecksumForFile(iTunesSoftwareUpdatesFilePath))) {
 			newManagedFirmware[thisFirmwareFileName] = thisDisplayDeviceNames
 			for (const thisOldManagedFirmwareFileName in oldManagedFirmware)
 				if ((thisOldManagedFirmwareFileName != thisFirmwareFileName) && (oldManagedFirmware[thisOldManagedFirmwareFileName] == thisDisplayDeviceNames)) {
-					const thisOldManagedFirmwarePath = `${firmwaresNeedingUpdate[thisFirmwareFileName].productSoftwareUpdatesFolder}/${thisOldManagedFirmwareFileName}`
+					const thisOldManagedFirmwarePath = `${thisProductSoftwareUpdatesFolder}/${thisOldManagedFirmwareFileName}`
 
 					try {
 						if (fileManager.fileExistsAtPath(thisOldManagedFirmwarePath)) {
@@ -1613,12 +1660,12 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 				}
 		}
 
-		Progress.completedUnitCount = progressBeforeDownload + (firmwaresNeedingUpdate[thisFirmwareFileName].size / 100)
+		Progress.completedUnitCount = progressBeforeDownload + (intendedFirmwareFileSize / 100)
 
 		if (userDidCancel) {
 			Progress.additionalDescription = `
 
-⏭️ Skipped: ${((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)}
+⏭️ Skipped: ${thisFirmwareFileNameDisplay}
 `
 			throw new Error('Skipped Download Because User Canceled')
 		}
@@ -1630,7 +1677,10 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 		debugLog('Updating Error', updatingError)
 
-		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+		if (curlPIDs.length > 0) {
+			try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+			curlPIDs.splice(0, curlPIDs.length)
+		}
 
 		if (userDidCancel || (updatingError.errorNumber === -128)) {
 			skippedCount ++
@@ -1674,7 +1724,10 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 
 for ( ; ; ) {
 	try {
-		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+		if (curlPIDs.length > 0) {
+			try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+			curlPIDs.splice(0, curlPIDs.length)
+		}
 
 		setProgressStopButtonEnabled(false)
 		setProgressSkipButtonToStop()
@@ -2127,7 +2180,7 @@ function displayAlertOrDialogDependingOnOS(titleText, messageText, windowTitle, 
 			// This makes sense so that centered text always looks decent, but that leading whitespace will STILL be trimmed when the new
 			// "extended" alert style is used on macOS 13 Ventura and newer, which is not necessary since the text will be left aligned.
 			// Since the messages displayed by IPSW Updater rely on tab indented formatting to look correct, this trimming behavior is worked around by replacing the first
-			// TAB on each line with NULL+TAB so that the line will no longer start with whitespace (since it will start with a NULL char instead) and therefore will NOT be trimmed.
+			// TAB on each line with NUL+TAB so that the line will no longer start with whitespace (since it will start with a NUL char instead) and therefore will NOT be trimmed.
 
 			if (titleText.includes('\t')) titleText = titleText.replace(/^\t/gm, '\0\t')
 			if (messageText.includes('\t')) messageText = messageText.replace(/^\t/gm, '\0\t')
@@ -2235,23 +2288,25 @@ function macIsAwakeAndUnlocked() {
 	// Screen Lock Check Based On: https://stackoverflow.com/questions/11505255/osx-check-if-the-screen-is-locked
 
 	// @ts-ignore: JXA-ObjC
-	return (($.CGDisplayIsActive($.CGMainDisplayID()) == 1) && (ObjC.deepUnwrap(cfRefToNSObjectIfNeeded($.CGSessionCopyCurrentDictionary())).CGSSessionScreenIsLocked !== true))
+	return (($.CGDisplayIsActive($.CGMainDisplayID()) == 1) && (ObjC.deepUnwrap(castRefToObjectIfNeeded($.CGSessionCopyCurrentDictionary())).CGSSessionScreenIsLocked !== true))
 }
 
-function cfRefToNSObjectIfNeeded(cfRefToConvert) {
+function castRefToObjectIfNeeded(refToCastToObject) {
 	// Some automatic CF-NS bridging broke in JXA in Mojave and then more broke in Catalina.
-	// This "CFMakeCollectable" workaround solves the issue to convert the CF references to NS objects,
+	// This "ObjC.castRefToObject" workaround solves the issue to convert the CF references to NS objects,
 	// but cannot be used indiscriminately on older versions of macOS that don't need the workaround as it
-	// will return an empty NS object unless the input is an actual CF reference that needs to be converted.
-	// So, this function will check that the input object needs to be converted and only convert it if so.
+	// will throw an error "Ref has no type" unless the input is an actual CF reference that needs to be converted.
+	// So, this function will attempt conversion, and if it fails the original object will be returned.
 	// This way, this function can be called with any objects that may or may not need to be converted
-	// on any version of macOS and will only convert the CF references to NS objects when needed.
-	// If an plain Ref() is passed, it will have an "undefined" type and does not need to be converted.
-	// If a reference is for an NSObject pointer, its type will be "@" which doesn't need to be converted.
-	// I am uncertain if there are more Ref types that do not need to be converted, but if they come up
-	// they should be easy to add to the following condition to ignore as needed.
+	// on any version of macOS and will always return an NS object whether or not conversion was needed.
+
+	// NOTE: This other "CFMakeCollectable" workaround (https://github.com/JXA-Cookbook/JXA-Cookbook/issues/13#issuecomment-174820487)
+	// was previously used (https://github.com/freegeek-pdx/IPSW-Updater/blob/8de604850714bb1526f166932fc7d05235646923/IPSW%20Updater.jxa#L2241-L2255)
+	// but I've since found this built-in "ObjC.castRefToObject" method (the name popped out to me in the list of method of the "ObjC" class
+	// which I was checking out for unrelated reasons) and testing showed it does the exact same conversion as the "CFMakeCollectable" workaround.
+
 	// @ts-ignore: JXA-ObjC
-	return (((cfRefToConvert instanceof Ref) && (cfRefToConvert.type !== undefined) && (cfRefToConvert.type != '@')) ? $.CFMakeCollectable(cfRefToConvert) : cfRefToConvert)
+	try { return ObjC.castRefToObject(refToCastToObject) } catch (castRefToObjectError) { return refToCastToObject }
 }
 
 function calculateChecksumForFile(filePath, algorithm = 1) {
@@ -2265,7 +2320,7 @@ function calculateChecksumForFile(filePath, algorithm = 1) {
 		const calculateChecksumPID = app.doShellScript(`/usr/bin/openssl dgst -sha${algorithm} ${quoteForShell(filePath)} > ${quoteForShell(checksumOutputFile)} 2>&1 & echo $!`)
 
 		try {
-			while (app.doShellScript(`/bin/ps -p ${calculateChecksumPID} > /dev/null 2>&1; echo $?`) == 0)
+			while (app.doShellScript(`kill -0 ${calculateChecksumPID}; echo $?`) == 0)
 				// @ts-ignore: JXA
 				delay(0.25)
 
@@ -2393,7 +2448,7 @@ function validateCodeSignatureForAppAtPath(validateAppPath) {
 	// The specified CSReqs string is verifying the correct Bundle ID, Team ID, and that it is signed with a Developer ID certificate, and starting on macOS 10.14 Mojave,
 	// there is a "notarized" token which can be included in the CSReq string to confirm the app is notarized, so notarization is also verified when that token is available and it not a testing build (discovered this wasn't supported/available on macOS 10.13 High Sierra through testing).
 	// This "notarized" token can be seen in the output of "spctl --list" on macOS 10.14 Mojave and newer and can also be seen here: https://gregoryszorc.com/docs/apple-codesign/stable/apple_codesign_gatekeeper.html
-	// This other "generate-csreq-hex-for-tcc-db.jxa" script also contains information about CSReqs and the "Security" framework functions to retreive them via JXA (which are used below): https://github.com/freegeek-pdx/macOS-Testing-and-Deployment-Scripts/blob/main/Other%20Scripts/generate-csreq-hex-for-tcc-db.jxa
+	// This other "generate_csreq_hex_for_tcc_db.jxa" script also contains information about CSReqs and the "Security" framework functions to retrieve them via JXA (which are used below): https://github.com/freegeek-pdx/macOS-Testing-and-Deployment-Scripts/blob/main/Other%20Scripts/generate_csreq_hex_for_tcc_db.jxa
 
 	// This first check is done using native C functions of the "Security" framework (such as https://developer.apple.com/documentation/security/1395784-secstaticcodecheckvalidity?language=objc).
 	// This checking using native C function may be a bit overzealous, but the basic code was already written for "mkuser" (https://mkuser.sh) where it was important to run code signature checks using native
@@ -2436,13 +2491,17 @@ function validateCodeSignatureForAppAtPath(validateAppPath) {
 	// but still triple-check by running "spctl -avv" and confirm it succeeds AND contains specific output to be extra thorough and show useful output if anything fails.
 	let spctlAssessPassed = false
 	let spctlAssessErrorCode = -1
-	let spctlAssessOutput = 'UNKNOWN SPCTL ASSESS ERROR'
+	let spctlAssessDict = {ERROR: 'UNKNOWN SPCTL ASSESS ERROR'}
 	try {
-		spctlAssessOutput = app.doShellScript(`/usr/sbin/spctl -avv ${quoteForShell(validateAppPath)} 2>&1`)
-		spctlAssessPassed = (spctlAssessOutput.includes(`source=${verifyNotarization ? 'Notarized ' : ''}Developer ID`) && spctlAssessOutput.endsWith(`origin=Developer ID Application: Pico Mitchell (${intendedCodeSignatureTeamID})`)) // The "spctl -avv" output on macOS 10.13 High Sierra will only ever include "source=Developer ID" even if it's actually notarized while macOS 10.14 Mojave and newer will include "source=Notarized Developer ID".
+		// @ts-ignore: JXA-ObjC
+		const spctlAssessParseError = $()
+		// @ts-ignore: JXA-ObjC
+		spctlAssessDict = ObjC.deepUnwrap($.NSPropertyListSerialization.propertyListWithDataOptionsFormatError($(app.doShellScript(`/usr/sbin/spctl -avv --raw ${quoteForShell(validateAppPath)}`)).dataUsingEncoding($.NSUTF8StringEncoding), $.NSPropertyListImmutable, null, spctlAssessParseError))
+		if (!spctlAssessParseError.isNil()) throw spctlAssessParseError
+		spctlAssessPassed = ((spctlAssessDict['assessment:verdict'] === true) && (spctlAssessDict['assessment:authority']['assessment:authority:source'] == `${verifyNotarization ? 'Notarized ' : ''}Developer ID`) && (spctlAssessDict['assessment:originator'] == `Developer ID Application: Pico Mitchell (${intendedCodeSignatureTeamID})`)) // The "spctl -avv" output on macOS 10.13 High Sierra will only ever specify a source of "Developer ID" even if it's actually notarized while macOS 10.14 Mojave and newer will specify a source of "Notarized Developer ID".
 	} catch (spctlAssessError) {
-		spctlAssessErrorCode = spctlAssessError.errorNumber
-		spctlAssessOutput = spctlAssessError.message
+		spctlAssessErrorCode = (spctlAssessError.errorNumber || spctlAssessError.code)
+		spctlAssessDict = {ERROR: (spctlAssessError.message || spctlAssessError.localizedDescription.js)}
 	}
 
 	if (!csReqValidityPassed || !codesignVerifyPassed || !spctlAssessPassed)
@@ -2453,7 +2512,7 @@ Code Signature Verification: ${codesignVerifyPassed ? 'PASSED' : `FAILED (${code
 ${codesignVerifyOutput.replace(/^.*\.app: /gm, '')}
 
 Security Assessment: ${spctlAssessPassed ? 'PASSED' : `FAILED (${spctlAssessErrorCode})`}
-${spctlAssessOutput.replace(/^.*\.app: /gm, '')}
+${JSON.stringify(spctlAssessDict)}
 
 Code Signing Requirements: ${csReqValidityPassed ? 'PASSED' : `FAILED (${csReqValidityErrorCode})`}
 ${actualCSReqStringRef.isNil() ? 'NO CSREQS' : actualCSReqStringRef.js}`) // Show "Code Signing Requirements" last since it's the most cryptic output and the other output has more understandable error messages.
@@ -2498,13 +2557,16 @@ function checkAndInstallAppUpdates() {
 			// @ts-ignore: JXA-ObjC
 			fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(temporaryFilesFolder, true, {}, $())
 
-		if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+		if (curlPIDs.length > 0) {
+			try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+			curlPIDs.splice(0, curlPIDs.length)
+		}
 
-		const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -L ${quoteForShell(appUpdatesJsonURL)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
+		const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -fL ${quoteForShell(appUpdatesJsonURL)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
 		curlPIDs.push(downloadAppUpdatesJsonPID)
 
 		try {
-			while (app.doShellScript(`/bin/ps -p ${downloadAppUpdatesJsonPID} > /dev/null 2>&1; echo $?`) == 0)
+			while (app.doShellScript(`kill -0 ${downloadAppUpdatesJsonPID}; echo $?`) == 0)
 				// @ts-ignore: JXA
 				delay(0.25)
 		} catch (waitingForAppUpdatesJsonError) {
@@ -2514,6 +2576,8 @@ function checkAndInstallAppUpdates() {
 
 			throw waitingForAppUpdatesJsonError
 		}
+
+		curlPIDs.splice(curlPIDs.indexOf(downloadAppUpdatesJsonPID), 1)
 
 		// @ts-ignore: JXA-ObjC
 		const appUpdatesInfo = JSON.parse($.NSString.stringWithContentsOfFileEncodingError(appUpdatesJsonFilePath, $.NSUTF8StringEncoding, readAppUpdatesFileError).js)
@@ -2589,7 +2653,7 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 					Progress.additionalDescription = `
 🗓 Released: ${displayReleaseDate}
 
-📏 Size: ${(latestAppUpdateInfo.size ? formatBytes(latestAppUpdateInfo.size) : 'UNKNOWN')}`
+📏 Size: ${(latestAppUpdateInfo.size ? `${formatBytes(latestAppUpdateInfo.size)} (${latestAppUpdateInfo.size} bytes)` : 'UNKNOWN')}`
 
 					setProgressStopButtonEnabled(true)
 					openProgressWindow()
@@ -2599,13 +2663,16 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 					const appUpdateZipFilePath = `${temporaryFilesFolder}/${appUpdateZipFileName}`
 					appUpdateProgressOutputFile = `${temporaryFilesFolder}/${appUpdateZipFileName}-progress`
 
-					if (curlPIDs.length > 0) try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+					if (curlPIDs.length > 0) {
+						try { app.doShellScript(`kill ${curlPIDs.join(' ')}`) } catch (ignoredError) { /* Ignore */ }
+						curlPIDs.splice(0, curlPIDs.length)
+					}
 
-					const downloadAppUpdatePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -L ${quoteForShell(latestAppUpdateInfo.url)} -o ${quoteForShell(appUpdateZipFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
+					const downloadAppUpdatePID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -fL ${quoteForShell(latestAppUpdateInfo.url)} -o ${quoteForShell(appUpdateZipFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
 					curlPIDs.push(downloadAppUpdatePID)
 
 					try {
-						while (app.doShellScript(`/bin/ps -p ${downloadAppUpdatePID} > /dev/null 2>&1; echo $?`) == 0)
+						while (app.doShellScript(`kill -0 ${downloadAppUpdatePID}; echo $?`) == 0)
 							// @ts-ignore: JXA
 							delay(0.25)
 					} catch (waitingForAppUpdateDownloadError) {
@@ -2616,7 +2683,23 @@ In 60 seconds, ${(autoInstallUpdate ? `version ${latestAppUpdateInfo.version} wi
 						throw waitingForAppUpdateDownloadError
 					}
 
+					curlPIDs.splice(curlPIDs.indexOf(downloadAppUpdatePID), 1)
+
 					setProgressStopButtonEnabled(false)
+
+					if (!fileManager.fileExistsAtPath(appUpdateZipFilePath))
+						throw new Error('App Update ZIP File Not Downloaded')
+
+					// @ts-ignore: JXA-ObjC
+					const appUpdateZipFileSize = fileManager.attributesOfItemAtPathError(appUpdateZipFilePath, $()).objectForKey('NSFileSize').js
+					if (latestAppUpdateInfo.size && (latestAppUpdateInfo.size != appUpdateZipFileSize))
+						throw new Error(`App Update ZIP File Is Invalid
+
+Intended ZIP Size:
+${formatBytes(latestAppUpdateInfo.size)} (${latestAppUpdateInfo.size} bytes)
+
+Downloaded ZIP Size:
+${formatBytes(appUpdateZipFileSize)} (${appUpdateZipFileSize} bytes)`)
 
 					const appUpdateZipFileSHA512Sum = calculateChecksumForFile(appUpdateZipFilePath, 512)
 					if (latestAppUpdateInfo.sha512sum != appUpdateZipFileSHA512Sum)
@@ -2845,7 +2928,7 @@ end try
 
 			closeProgressWindow()
 		} else
-			throw new Error(`App Updates Info Is Empty or Is Not an Array`)
+			throw new Error('App Updates Info Is Empty or Is Not an Array')
 	} catch (appUpdateError) {
 		if (!userCanceledUpdate) userCanceledUpdate = (appUpdateError.errorNumber === -128)
 
@@ -2869,7 +2952,7 @@ end try
 		if (!userCanceledUpdate && macIsAwakeAndUnlocked()) {
 			const appUpdateErrorAlertMessage = `${appUpdateErrorMessage.replace('CURL Error: (6) ', '')}${(appUpdateErrorMessage.startsWith('CURL Error:') || appUpdateErrorMessage.startsWith('App Update ') || appUpdateErrorMessage.startsWith('Code Signature Validation ')) ? '' : `
 
-${((typeof appUpdateError == 'object') ? JSON.stringify(appUpdateError, Object.getOwnPropertyNames(appUpdateError)) : appUpdateError)}`}` // Do NOT display detailed error message (such as failing to read or parse file) if the actual error was because of a CURL download failure since it may just confuse the actual issue, and do not show "appUpdateError" dict for "App Update" or "Code Signature" error messages since the custom message itself contains all the relevant info.
+${((appUpdateError instanceof Object) ? JSON.stringify(appUpdateError, Object.getOwnPropertyNames(appUpdateError)) : appUpdateError)}`}` // Do NOT display detailed error message (such as failing to read or parse file) if the actual error was because of a CURL download failure since it may just confuse the actual issue, and do not show "appUpdateError" dict for "App Update" or "Code Signature" error messages since the custom message itself contains all the relevant info.
 
 			app.activate()
 			if (getPreference('AppUpdateAvailable', 'bool'))
@@ -3348,7 +3431,7 @@ ${createDisplayScheduleFor(latestAutoWakeSchedules.Off)}` : '')}` // Always incl
 						} catch (setPowerScheduleError) {
 							debugLog(`Set ${onScheduleName} Error`, setPowerScheduleError)
 
-							if (setPowerScheduleError.errorNumber !== -128) {
+							if ((setPowerScheduleError.errorNumber !== -128) && (setPowerScheduleError.errorNumber !== -60006)) { // https://developer.apple.com/documentation/security/1540004-authorization_services_result_co/errauthorizationcanceled?language=objc
 								app.activate()
 								app.displayAlert(`${appName}: Failed to Set ${onScheduleName}`,
 									{
@@ -3514,7 +3597,7 @@ ${conflictingOnDisplaySchedule}` // Always include "appName" in admin prompt sin
 								} catch (removeConflictingPowerScheduleError) {
 									debugLog(`Remove Conflicting ${conflictingOffScheduleName} Error`, removeConflictingPowerScheduleError)
 
-									if (removeConflictingPowerScheduleError.errorNumber !== -128) {
+									if ((removeConflictingPowerScheduleError.errorNumber !== -128) && (removeConflictingPowerScheduleError.errorNumber !== -60006)) { // https://developer.apple.com/documentation/security/1540004-authorization_services_result_co/errauthorizationcanceled?language=objc
 										app.activate()
 										app.displayAlert(`${appName}: Failed to Remove Conflicting ${conflictingOffScheduleName}`,
 											{
@@ -3609,7 +3692,7 @@ ${createDisplayScheduleFor(latestAutoWakeSchedules.Off)}` : '')}` // Always incl
 					} catch (removePowerScheduleError) {
 						debugLog(`Remove ${removeScheduleName} Error`, removePowerScheduleError)
 
-						if (removePowerScheduleError.errorNumber !== -128) {
+						if ((removePowerScheduleError.errorNumber !== -128) && (removePowerScheduleError.errorNumber !== -60006)) { // https://developer.apple.com/documentation/security/1540004-authorization_services_result_co/errauthorizationcanceled?language=objc
 							app.activate()
 							app.displayAlert(`${appName}: Failed to Remove ${removeScheduleName}`,
 								{
@@ -3655,7 +3738,7 @@ function hasConflictingPowerSchedules(latestAutoWakeSchedules = parseAutoWakePow
 }
 
 function createDisplayScheduleFor(eventDict) {
-	if ((eventDict !== undefined) && (typeof eventDict === 'object') && Array.isArray(eventDict.days) && (eventDict.days.length > 0)) {
+	if ((eventDict !== undefined) && (eventDict instanceof Object) && Array.isArray(eventDict.days) && (eventDict.days.length > 0)) {
 		let displayReturnString = ''
 
 		if ((typeof eventDict.type === 'string')) {
@@ -3703,7 +3786,7 @@ function parseLaunchAgentSchedule() {
 		// @ts-ignore: JXA-ObjC
 		launchAgentScheduleArray = ObjC.deepUnwrap(launchAgentPlistDict.objectForKey('StartCalendarInterval'))
 		if (launchAgentScheduleArray === undefined) throw new Error('No "StartCalendarInterval" Specified')
-		if (typeof launchAgentScheduleArray != 'object') throw new Error('INVALID "StartCalendarInterval" Specified')
+		if (!(launchAgentScheduleArray instanceof Object)) throw new Error('INVALID "StartCalendarInterval" Specified')
 	} catch (readLaunchAgentPlistError) {
 		debugLog('Read Schedule From LaunchAgent PLIST Error', readLaunchAgentPlistError)
 
@@ -4018,44 +4101,44 @@ function getPreference(key, intendedType = 'string', isReattempt = false) {
 			if (intendedType == 'url') {
 				returnPreferenceValue = standardUserDefaults.URLForKey(key).absoluteString.js
 				if (typeof returnPreferenceValue != 'string')
-					throw new Error(`URL Preference Value is "${typeof returnPreferenceValue}" instead of "string"`)
+					throw new Error(`URL Preference Value Is "${typeof returnPreferenceValue}" Instead of "string"`)
 			} else if (intendedType == 'array') {
 				// @ts-ignore: JXA-ObjC
 				returnPreferenceValue = ObjC.deepUnwrap(standardUserDefaults.arrayForKey(key))
 				if (!Array.isArray(returnPreferenceValue))
-					throw new Error(`Array Preference Value is not "array"`)
+					throw new Error('Array Preference Value Is Not "array"')
 			} else if (intendedType == 'dict') {
 				// @ts-ignore: JXA-ObjC
 				returnPreferenceValue = ObjC.deepUnwrap(standardUserDefaults.dictionaryForKey(key))
-				if (typeof returnPreferenceValue != 'object')
-					throw new Error(`Dict Preference Value is "${typeof returnPreferenceValue}" instead of "object"`)
+				if (!(returnPreferenceValue instanceof Object))
+					throw new Error(`Dict Preference Value Is "${typeof returnPreferenceValue}" Instead of "object"`)
 			} else if (intendedType == 'string') {
 				returnPreferenceValue = standardUserDefaults.stringForKey(key).js
 				if (typeof returnPreferenceValue != 'string')
-					throw new Error(`String Preference Value is "${typeof returnPreferenceValue}" instead of "string"`)
+					throw new Error(`String Preference Value Is "${typeof returnPreferenceValue}" Instead of "string"`)
 			} else if (intendedType == 'string array') {
 				// @ts-ignore: JXA-ObjC
 				returnPreferenceValue = ObjC.deepUnwrap(standardUserDefaults.stringArrayForKey(key))
 				if (!Array.isArray(returnPreferenceValue))
-					throw new Error(`String Array Preference Value is not "array"`)
+					throw new Error('String Array Preference Value Is Not "array"')
 			} else if (intendedType == 'data')
 				returnPreferenceValue = standardUserDefaults.dataForKey(key)
 			else if (intendedType == 'bool') {
 				returnPreferenceValue = standardUserDefaults.boolForKey(key) // DO NOT ".js" unwrap boolean since it's already unwrapped and will be undefined if ".js" is used.
 				if (typeof returnPreferenceValue != 'boolean')
-					throw new Error(`Bool Preference Value is "${typeof returnPreferenceValue}" instead of "bool"`)
+					throw new Error(`Bool Preference Value Is "${typeof returnPreferenceValue}" Instead of "bool"`)
 			} else if (intendedType == 'int') {
 				returnPreferenceValue = parseInt(standardUserDefaults.integerForKey(key)) // DO NOT ".js" unwrap integer since it's already unwrapped and will be undefined if ".js" is used.
 				if (typeof returnPreferenceValue != 'number')
-					throw new Error(`Int Preference Value is "${typeof returnPreferenceValue}" instead of "number"`)
+					throw new Error(`Int Preference Value Is "${typeof returnPreferenceValue}" Instead of "number"`)
 			} else if (intendedType == 'float') {
 				returnPreferenceValue = parseFloat(standardUserDefaults.floatForKey(key)) // DO NOT ".js" unwrap float since it's already unwrapped and will be undefined if ".js" is used.
 				if (typeof returnPreferenceValue != 'number')
-					throw new Error(`Float Preference Value is "${typeof returnPreferenceValue}" instead of "number"`)
+					throw new Error(`Float Preference Value Is "${typeof returnPreferenceValue}" Instead of "number"`)
 			} else if (intendedType == 'double') {
 				returnPreferenceValue = parseFloat(standardUserDefaults.doubleForKey(key)) // DO NOT ".js" unwrap double since it's already unwrapped and will be undefined if ".js" is used.
 				if (typeof returnPreferenceValue != 'number')
-					throw new Error(`Double Preference Value is "${typeof returnPreferenceValue}" instead of "number"`)
+					throw new Error(`Double Preference Value Is "${typeof returnPreferenceValue}" Instead of "number"`)
 			} else
 				// @ts-ignore: JXA-ObjC
 				returnPreferenceValue = ObjC.deepUnwrap(standardUserDefaults.objectForKey(key))
@@ -4120,14 +4203,14 @@ function setPreference(key, value, type = 'string') {
 
 function debugLog(message, error) {
 	if (message !== undefined) {
-		if (typeof message == 'object')
+		if (message instanceof Object)
 			message = JSON.stringify(message, null, 4)
 
 		let displayError = ''
 		if (error !== undefined) {
 			displayError = ': '
 			if (error.message) displayError += error.message
-			if (typeof error == 'object') displayError += ` - ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
+			if (error instanceof Object) displayError += ` - ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
 			else displayError += error
 		}
 
@@ -4139,7 +4222,7 @@ function debugLog(message, error) {
 /** @param {*} message, @param {string} title */
 function debugDialog(message = 'UNDEFINED', title = 'DEBUG') {
 	if (!title.startsWith('DEBUG')) title = `DEBUG: ${title}`
-	if (typeof message == 'object') message = JSON.stringify(message, (Object.getOwnPropertyNames(message).includes('stack') ? Object.getOwnPropertyNames(message) : null), 4) // Check if object properties contains "stack" to determine if it's an error object that needs its properties specified in "JSON.stringify()".
+	if (message instanceof Object) message = JSON.stringify(message, (Object.getOwnPropertyNames(message).includes('stack') ? Object.getOwnPropertyNames(message) : null), 4) // Check if object properties contains "stack" to determine if it's an error object that needs its properties specified in "JSON.stringify()".
 
 	app.activate()
 	app.displayDialog(title,

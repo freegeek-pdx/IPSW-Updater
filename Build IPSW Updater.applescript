@@ -171,7 +171,7 @@ repeat
 			-- NOTE: Could not figure out how to get the latest version from the "mvnrepository.com" page, so use the source code Tags from the GitHub API instead.
 			-- The latest version should always be index 17 (18th item) in the JSON Tags array because the first 17 items will all be an older "webpack-v2..." style naming.
 			-- Also, it's fine to use "plutil -extract [keypath] raw" for JSON parsing/extraction since we will only ever be building on macOS 12 Monterey or newer where the "raw" output option is available.
-			set latestGoogleClosureCompileVersion to (do shell script "curl -m 5 -sL 'https://api.github.com/repos/google/closure-compiler/tags' | plutil -extract 17.name raw -; exit 0") -- Always succeed to catch to error ourselves instead of showing the "plutil" error.
+			set latestGoogleClosureCompileVersion to (do shell script "curl -m 5 -sfL 'https://api.github.com/repos/google/closure-compiler/tags' | plutil -extract 17.name raw -; exit 0") -- Always succeed to catch to error ourselves instead of showing the "plutil" error.
 			if (latestGoogleClosureCompileVersion does not start with "v2") then error "MINIFY JXA ERROR (FAILED TO GET LATEST GOOGLE CLOSURE COMPILER VERSION)"
 			
 			if (installedGoogleClosureCompileVersion is not equal to latestGoogleClosureCompileVersion) then
@@ -228,11 +228,13 @@ Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is 
 				"const zt=$.NSTask.alloc.init;" & ¬
 				"zt.executableURL=$.NSURL.fileURLWithPath('/usr/bin/zcat');" & ¬
 				"zt.standardInput=$.NSPipe.pipe;" & ¬
-				"zt.standardInput.fileHandleForWriting.writeData($.NSData.alloc.initWithBase64EncodedStringOptions('" & jxaObfuscatedSource & "',$.NSDataBase64DecodingIgnoreUnknownCharacters));" & ¬
-				"zt.standardInput.fileHandleForWriting.closeFile;" & ¬
+				"const ztI=zt.standardInput.fileHandleForWriting;" & ¬
+				"ztI.writeData($.NSData.alloc.initWithBase64EncodedStringOptions('" & jxaObfuscatedSource & "',$.NSDataBase64DecodingIgnoreUnknownCharacters));" & ¬
+				"ztI.closeFile;" & ¬
 				"zt.standardOutput=$.NSPipe.pipe;" & ¬
 				"zt.launchAndReturnError($());" & ¬
-				"s=$.NSString.alloc.initWithDataEncoding(($.NSProcessInfo.processInfo.isOperatingSystemAtLeastVersion({majorVersion:10,minorVersion:15,patchVersion:0})?zt.standardOutput.fileHandleForReading.readDataToEndOfFileAndReturnError($()):zt.standardOutput.fileHandleForReading.readDataToEndOfFile),$.NSUTF8StringEncoding).js;" & ¬
+				"const ztO=zt.standardOutput.fileHandleForReading;" & ¬
+				"s=$.NSString.alloc.initWithDataEncoding((ztO.respondsToSelector('readDataToEndOfFileAndReturnError:')?ztO.readDataToEndOfFileAndReturnError($()):ztO.readDataToEndOfFile),$.NSUTF8StringEncoding).js;" & ¬
 				"if(!s)throw new Error('Source Decode/Decompress Error');" & ¬
 				"if(s.length!=" & jxaMinifiedSourceLength & ")throw new Error(`Invalid Decoded/Decompressed Source (${s.length} ≠ " & jxaMinifiedSourceLength & ")`);" & ¬
 				"eval(s);" & ¬
@@ -248,7 +250,7 @@ Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is 
 			
 			set quotedBuiltAppInfoPlistPath to (quoted form of (appBuildPath & "/Contents/Info.plist"))
 			-- The "main.scpt" for normal AppleScript applets must NOT be writable to prevent the code signature from being invalidated: https://developer.apple.com/library/archive/releasenotes/AppleScript/RN-AppleScript/RN-10_8/RN-10_8.html#//apple_ref/doc/uid/TP40000982-CH108-SW8
-			-- I don't think that applies to JXA applets since they do not write back properties to the script file, but still doesn't hurt to set it as not writable. 
+			-- I don't think that applies to JXA applets since they do not write back properties to the script file, but still doesn't hurt to set it as not writable.
 			do shell script ("
 chmod a-w " & (quoted form of (appBuildPath & "/Contents/Resources/Scripts/main.scpt")) & "
 
@@ -350,27 +352,27 @@ codesign -s 'Developer ID Application' --identifier " & (quoted form of (bundleI
 							
 							-- NOTE: Every command is chained with "&&" so that if anything errors, it all stops and all combined output from every command will be included in the error message.
 							-- Also, the output of "spctl -avv" is checked for "source=Notarized Developer ID" since a signed but unnotarized app could pass the initial assessment (but stapling should have failed before getting the that check anyways).
-							set notarizationOutput to (do shell script ("rm -f " & (quoted form of appZipPathForNotarization) & " " & (quoted form of appZipPath) & " && \\
-echo 'Code Signing App...' && \\
-codesign -fs 'Developer ID Application' -o runtime --strict " & (quoted form of appBuildPath) & " 2>&1 && \\
+							set notarizationOutput to (do shell script ("rm -f " & (quoted form of appZipPathForNotarization) & " " & (quoted form of appZipPath) & " &&
+echo 'Code Signing App...' &&
+codesign -fs 'Developer ID Application' -o runtime --strict " & (quoted form of appBuildPath) & " 2>&1 &&
 echo '
-Zipping App for Notarization...' && \\
-ditto -ck --keepParent " & (quoted form of appBuildPath) & " " & (quoted form of appZipPathForNotarization) & " 2>&1 && \\
+Zipping App for Notarization...' &&
+ditto -ck --keepParent " & (quoted form of appBuildPath) & " " & (quoted form of appZipPathForNotarization) & " 2>&1 &&
 echo '
-Notarizing App...' && \\
-xcrun notarytool submit " & (quoted form of appZipPathForNotarization) & " --keychain-profile 'notarytool App Specific Password' --wait 2>&1 && \\
-rm -f " & (quoted form of appZipPathForNotarization) & " && \\
+Notarizing App...' &&
+xcrun notarytool submit " & (quoted form of appZipPathForNotarization) & " --keychain-profile 'notarytool App Specific Password' --wait 2>&1 &&
+rm -f " & (quoted form of appZipPathForNotarization) & " &&
 echo '
-Stapling Notarization Ticket to App...' && \\
-xcrun stapler staple " & (quoted form of appBuildPath) & " 2>&1 && \\
+Stapling Notarization Ticket to App...' &&
+xcrun stapler staple " & (quoted form of appBuildPath) & " 2>&1 &&
 echo '
-Assessing Notarized App...' && \\
-spctl_assess_output=\"$(spctl -avv " & (quoted form of appBuildPath) & " 2>&1)\" && \\
-echo \"${spctl_assess_output}\" && \\
-codesign -vv " & (quoted form of appBuildPath) & " 2>&1 && \\
-echo \"${spctl_assess_output}\" | grep -qxF 'source=Notarized Developer ID' && \\
+Assessing Notarized App...' &&
+spctl_assess_output=\"$(spctl -avv " & (quoted form of appBuildPath) & " 2>&1)\" &&
+echo \"${spctl_assess_output}\" &&
+codesign -vv " & (quoted form of appBuildPath) & " 2>&1 &&
+echo \"${spctl_assess_output}\" | grep -qxF 'source=Notarized Developer ID' &&
 echo '
-Zipping Notarized App...' && \\
+Zipping Notarized App...' &&
 ditto -ck --keepParent --sequesterRsrc --zlibCompressionLevel 9 " & (quoted form of appBuildPath) & " " & (quoted form of appZipPath) & " 2>&1") without altering line endings) -- VERY IMPORTANT to NOT alter line endings so that "awk" can read each line (which needs "\n" instead of "\r").
 							
 							set notarizationLog to ""
