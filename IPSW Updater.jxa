@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2023.1.19-1'
+const appVersion = '2023.2.24-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -1239,7 +1239,8 @@ try {
 				let deviceNameParts = thisDeviceObject.name.split(' (')
 				if (deviceNameParts.length == 1) deviceNameParts = thisDeviceObject.name.split(',')
 				const baseDeviceName = deviceNameParts[0]
-				if (!uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.includes(baseDeviceName))
+				const baseDeviceNameLower = baseDeviceName.toLowerCase()
+				if (!uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.some(thisBaseDeviceNameElement => thisBaseDeviceNameElement.toLowerCase() === baseDeviceNameLower))
 					uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.push(baseDeviceName)
 				uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.sort()
 			} else if (!thisFirmware.signed && !unsignedFirmwares.includes(thisFirmwareFileName))
@@ -1405,7 +1406,7 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 		const thisProductSoftwareUpdatesFolder = firmwaresNeedingUpdate[thisFirmwareFileName].productSoftwareUpdatesFolder
 		const iTunesSoftwareUpdatesFilePath = `${thisProductSoftwareUpdatesFolder}/${thisFirmwareFileName}`
 
-		const thisFirmwareFileNameDisplay = `${((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)}`
+		const thisFirmwareFileNameDisplay = ((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)
 
 		const intendedFirmwareFileSize = firmwaresNeedingUpdate[thisFirmwareFileName].size
 		const intendedFirmwareFileSizeDisplay = formatBytes(intendedFirmwareFileSize)
@@ -1475,7 +1476,7 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 						curlPIDs.push(downloadFirmwarePID)
 						debugLog(`Download ${thisFirmwareFileName} - CURL PID`, downloadFirmwarePID)
 
-						try { app.doShellScript(`/usr/bin/caffeinate -dimsu -w ${downloadFirmwarePID} > /dev/null 2>&1 &`) } catch (ignoredError) { /* Ignore */ } // Prevent this Mac from Sleeping while CURL is running.
+						try { app.doShellScript(`/usr/bin/caffeinate -dimsuw ${downloadFirmwarePID} > /dev/null 2>&1 &`) } catch (ignoredError) { /* Ignore */ } // Prevent this Mac from Sleeping while CURL is running.
 
 						// @ts-ignore: JXA
 						delay(1)
@@ -2272,7 +2273,7 @@ function trashOrDeleteOutdatedFirmware(ipswFilePathToTrashOrDelete) {
 }
 
 function wakeMacUp() {
-	try { app.doShellScript('/usr/bin/caffeinate -u -t 1 > /dev/null 2>&1 &') } catch (ignoredError) { /* Ignore */ }
+	try { app.doShellScript('/usr/bin/caffeinate -ut 1 > /dev/null 2>&1 &') } catch (ignoredError) { /* Ignore */ }
 }
 
 function macIsAwakeAndUnlocked() {
@@ -2443,11 +2444,12 @@ function validateCodeSignatureForAppAtPath(validateAppPath) {
 	const verifyNotarization = (!validateAppVersion.endsWith('-0') && isMojaveOrNewer) // DO NOT verify notarization for testing builds (with versions ending in "-0") since they will only be signed and not notarized, and see comments below about how notarization CANNOT be verified on macOS 10.13 High Sierra.
 
 	const intendedCodeSignatureTeamID = 'YRW6NUGA63'
-	const validCSReqString = `${verifyNotarization ? 'notarized and ' : ''}identifier "${bundleIdentifier}" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = ${intendedCodeSignatureTeamID}`
-	// Explanation of Code Signing Requirement Strings: https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements
+	const validCSReqString = `${verifyNotarization ? 'notarized and ' : ''}identifier "${bundleIdentifier}" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${intendedCodeSignatureTeamID}"`
+	// Explanation of Code Signing Requirements: https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements
 	// The specified CSReqs string is verifying the correct Bundle ID, Team ID, and that it is signed with a Developer ID certificate, and starting on macOS 10.14 Mojave,
 	// there is a "notarized" token which can be included in the CSReq string to confirm the app is notarized, so notarization is also verified when that token is available and it not a testing build (discovered this wasn't supported/available on macOS 10.13 High Sierra through testing).
 	// This "notarized" token can be seen in the output of "spctl --list" on macOS 10.14 Mojave and newer and can also be seen here: https://gregoryszorc.com/docs/apple-codesign/stable/apple_codesign_gatekeeper.html
+	// And using this "notarized" token to verify notarization can be seen here: https://developer.apple.com/forums/thread/128683?answerId=404727022#404727022 & https://developer.apple.com/forums/thread/130560
 	// This other "generate_csreq_hex_for_tcc_db.jxa" script also contains information about CSReqs and the "Security" framework functions to retrieve them via JXA (which are used below): https://github.com/freegeek-pdx/macOS-Testing-and-Deployment-Scripts/blob/main/Other%20Scripts/generate_csreq_hex_for_tcc_db.jxa
 
 	// This first check is done using native C functions of the "Security" framework (such as https://developer.apple.com/documentation/security/1395784-secstaticcodecheckvalidity?language=objc).
@@ -2475,19 +2477,25 @@ function validateCodeSignatureForAppAtPath(validateAppPath) {
 		// @ts-ignore: JXA-ObjC
 		((csReqValidityErrorCode = $.SecStaticCodeCheckValidity(staticCodeRef, $.kSecCSCheckAllArchitectures, validCSReqRef)) === 0)) // I also tried using "$.SecCodeCheckValidity(staticCodeRef, $.kSecCSDefaultFlags, validCSReqRef)" but it always returned error code "-67071" (errSecCSInvalidObjectRef = Invalid API object reference) while "SecStaticCodeCheckValidity" seems to properly check the CSReq string and return "0" when sucessfully matched.
 
-	// The "SecStaticCodeCheckValidity" function above does basically the same thing as the following "codesign -vvR" command, but still double-check it succeeds to be extra thorough and show useful output if anything fails.
+	// The "SecStaticCodeCheckValidity" function above does basically the same thing as the following "codesign -v ..." command, but still double-check it succeeds to be extra thorough and show useful output if anything fails.
 	let codesignVerifyPassed = false
 	let codesignVerifyErrorCode = -1
 	let codesignVerifyOutput = 'UNKNOWN CODESIGN VERIFY ERROR'
 	try {
-		codesignVerifyOutput = app.doShellScript(`/usr/bin/codesign -vvR ${quoteForShell(`=${validCSReqString}`)} ${quoteForShell(validateAppPath)} 2>&1`)
+		codesignVerifyOutput = app.doShellScript(`/usr/bin/codesign -vv --deep --strict -R ${quoteForShell(`=${validCSReqString}`)} ${quoteForShell(validateAppPath)} 2>&1`)
 		codesignVerifyPassed = true
+
+		// Information about using "--deep" and "--strict" options during "codesign" verification:
+			// https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/resolving_common_notarization_issues#3087735
+			// https://developer.apple.com/library/archive/technotes/tn2206/_index.html#//apple_ref/doc/uid/DTS40007919-CH1-TNTAG211
+			// https://developer.apple.com/library/archive/technotes/tn2206/_index.html#//apple_ref/doc/uid/DTS40007919-CH1-TNTAG404
+		// The "--deep" option is DEPRECATED in macOS 13 Ventura for SIGNING but I don't think it's deprecated for VERIFYING since verification is where it was always really intended to be used (as explained in the note in the last link in the list above).
 	} catch (codesignVerifyError) {
 		codesignVerifyErrorCode = codesignVerifyError.errorNumber
 		codesignVerifyOutput = codesignVerifyError.message
 	}
 
-	// The "SecStaticCodeCheckValidity" function AND "codesign -vvR" command above already confirm the app is signed by the intended Team ID (and notarized, when possible on macOS 10.14 Mojave or newer)
+	// The "SecStaticCodeCheckValidity" function AND "codesign -v ..." command above already confirm the app is signed by the intended Team ID (and notarized, when possible on macOS 10.14 Mojave or newer)
 	// but still triple-check by running "spctl -avv" and confirm it succeeds AND contains specific output to be extra thorough and show useful output if anything fails.
 	let spctlAssessPassed = false
 	let spctlAssessErrorCode = -1
@@ -2496,11 +2504,17 @@ function validateCodeSignatureForAppAtPath(validateAppPath) {
 		// @ts-ignore: JXA-ObjC
 		const spctlAssessParseError = $()
 		// @ts-ignore: JXA-ObjC
-		spctlAssessDict = ObjC.deepUnwrap($.NSPropertyListSerialization.propertyListWithDataOptionsFormatError($(app.doShellScript(`/usr/sbin/spctl -avv --raw ${quoteForShell(validateAppPath)}`)).dataUsingEncoding($.NSUTF8StringEncoding), $.NSPropertyListImmutable, null, spctlAssessParseError))
+		spctlAssessDict = ObjC.deepUnwrap($.NSPropertyListSerialization.propertyListWithDataOptionsFormatError($(app.doShellScript(`/usr/sbin/spctl -avv --raw ${quoteForShell(validateAppPath)}; exit 0`)).dataUsingEncoding($.NSUTF8StringEncoding), $.NSPropertyListImmutable, null, spctlAssessParseError))
+		// IMPORTANT: Explicitly exiting 0 (success) after running "spctl -a ..." via "doShellScript" because we DO NOT want to rely on the exit code of the "spctl" assessment (since "doShellScript" would throw when the final command exits non-zero),
+		// and ALSO DO NOT want to check the "assessment:verdict" in the output dictionary in the checks below because if macOS is set to only allow Mac App Store apps to run the "spctl" assessment will always fail even if the app is notarized.
+		// BUT, if the app got this far to be able to run and load at all it means that a user manually allowed the app regardless of the Mac App Store apps only setting.
+		// But when the app is manually allowed to run in this case the "spctl" assessment still fails. When this happens, it would be silly for the app itself to refuse to run after a user explicitly allowed it to run.
+		// So, will only verify that the "spctl" assessment output shows that the app is properly notarized with the correct identity and not worry about whether or not "spctl" assessment was actually "accepted" or "rejected".
+
 		if (!spctlAssessParseError.isNil()) throw spctlAssessParseError
-		spctlAssessPassed = ((spctlAssessDict['assessment:verdict'] === true) && (spctlAssessDict['assessment:authority']['assessment:authority:source'] == `${verifyNotarization ? 'Notarized ' : ''}Developer ID`) && (spctlAssessDict['assessment:originator'] == `Developer ID Application: Pico Mitchell (${intendedCodeSignatureTeamID})`)) // The "spctl -avv" output on macOS 10.13 High Sierra will only ever specify a source of "Developer ID" even if it's actually notarized while macOS 10.14 Mojave and newer will specify a source of "Notarized Developer ID".
+		spctlAssessPassed = ((spctlAssessDict['assessment:authority']['assessment:authority:source'] == `${verifyNotarization ? 'Notarized ' : ''}Developer ID`) && (spctlAssessDict['assessment:originator'] == `Developer ID Application: Pico Mitchell (${intendedCodeSignatureTeamID})`)) // The "spctl -avv" output on macOS 10.13 High Sierra will only ever specify a source of "Developer ID" even if it's actually notarized while macOS 10.14 Mojave and newer will specify a source of "Notarized Developer ID".
 	} catch (spctlAssessError) {
-		spctlAssessErrorCode = (spctlAssessError.errorNumber || spctlAssessError.code)
+		spctlAssessErrorCode = (spctlAssessError.errorNumber || spctlAssessError.code) // There should never be an "errorNumber" or "message" from the "spctl" "doShellScript" command throwing an error because of explicitly exiting 0 as described above, but keep the checks just in case since it doesn't hurt anything.
 		spctlAssessDict = {ERROR: (spctlAssessError.message || spctlAssessError.localizedDescription.js)}
 	}
 
@@ -2545,12 +2559,12 @@ function checkAndInstallAppUpdates() {
 
 	openProgressWindow()
 
-	const appUpdatesJsonFilePath = `${temporaryFilesFolder}/app-updates.json`
-	let appUpdateProgressOutputFile = `${temporaryFilesFolder}/app-updates.json-progress`
+	const latestAppUpdateJsonFilePath = `${temporaryFilesFolder}/latest-app-update.json`
+	let appUpdateProgressOutputFile = `${temporaryFilesFolder}/latest-app-update.json-progress`
 	let userCanceledUpdate = false
 
 	// @ts-ignore: JXA-ObjC
-	const readAppUpdatesFileError = $()
+	const readLatestAppUpdateFileError = $()
 
 	try {
 		if (!fileManager.fileExistsAtPath(temporaryFilesFolder))
@@ -2562,34 +2576,32 @@ function checkAndInstallAppUpdates() {
 			curlPIDs.splice(0, curlPIDs.length)
 		}
 
-		const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -fL ${quoteForShell(appUpdatesJsonURL)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
-		curlPIDs.push(downloadAppUpdatesJsonPID)
+		const downloadLatestAppUpdateJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -fL ${quoteForShell(`${appUpdatesJsonURL}&latest`)} -o ${quoteForShell(latestAppUpdateJsonFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
+		curlPIDs.push(downloadLatestAppUpdateJsonPID)
 
 		try {
-			while (app.doShellScript(`kill -0 ${downloadAppUpdatesJsonPID}; echo $?`) == 0)
+			while (app.doShellScript(`kill -0 ${downloadLatestAppUpdateJsonPID}; echo $?`) == 0)
 				// @ts-ignore: JXA
 				delay(0.25)
-		} catch (waitingForAppUpdatesJsonError) {
-			debugLog('Waiting for App Updates JSON Error', waitingForAppUpdatesJsonError)
+		} catch (waitingForLatestAppUpdateJsonError) {
+			debugLog('Waiting for App Updates JSON Error', waitingForLatestAppUpdateJsonError)
 
-			try { app.doShellScript(`kill ${downloadAppUpdatesJsonPID}`) } catch (ignoredError) { /* Ignore */ }
+			try { app.doShellScript(`kill ${downloadLatestAppUpdateJsonPID}`) } catch (ignoredError) { /* Ignore */ }
 
-			throw waitingForAppUpdatesJsonError
+			throw waitingForLatestAppUpdateJsonError
 		}
 
-		curlPIDs.splice(curlPIDs.indexOf(downloadAppUpdatesJsonPID), 1)
+		curlPIDs.splice(curlPIDs.indexOf(downloadLatestAppUpdateJsonPID), 1)
 
 		// @ts-ignore: JXA-ObjC
-		const appUpdatesInfo = JSON.parse($.NSString.stringWithContentsOfFileEncodingError(appUpdatesJsonFilePath, $.NSUTF8StringEncoding, readAppUpdatesFileError).js)
+		const latestAppUpdateInfo = JSON.parse($.NSString.stringWithContentsOfFileEncodingError(latestAppUpdateJsonFilePath, $.NSUTF8StringEncoding, readLatestAppUpdateFileError).js)
 		// NOTE: NOT using "ObjC.deepUnwrap($.NSJSONSerialization.JSONObjectWithDataOptionsError(...))" for consistency with other JSON parsing which don't use it for other reasons which aren't really important here (this JSON parse really would be fine with either technique).
 
-		if (Array.isArray(appUpdatesInfo) && (appUpdatesInfo.length > 0)) {
+		if (latestAppUpdateInfo instanceof Object) {
 			// @ts-ignore: JXA-ObjC
 			try { fileManager.removeItemAtPathError(appUpdateProgressOutputFile, $()) } catch (ignoredError) { /* Ignore */ }
 			// @ts-ignore: JXA-ObjC
-			try { fileManager.removeItemAtPathError(appUpdatesJsonFilePath, $()) } catch (ignoredError) { /* Ignore */ }
-
-			const latestAppUpdateInfo = appUpdatesInfo[0]
+			try { fileManager.removeItemAtPathError(latestAppUpdateJsonFilePath, $()) } catch (ignoredError) { /* Ignore */ }
 
 			setPreference('LastAppUpdateCheck', new Date(), 'date')
 
@@ -2747,7 +2759,7 @@ ${appUpdateZipFileSHA512Sum}`)
 					const globalApplicationsFolderIsWritable = globalApplicationsFolderIsWritableRef.js
 
 					// @ts-ignore: JXA-ObjC
-					const updatedAppFileName = `${$(appUpdateTempFilePath).lastPathComponent.js}`
+					const updatedAppFileName = $(appUpdateTempFilePath).lastPathComponent.js
 
 					const installAppUpdateScript = `/usr/bin/osascript -e ${quoteForShell(`
 use AppleScript version "2.7"
@@ -2933,7 +2945,7 @@ end try
 		if (!userCanceledUpdate) userCanceledUpdate = (appUpdateError.errorNumber === -128)
 
 		let appUpdateErrorMessage = appUpdateError.message
-		if (!readAppUpdatesFileError.isNil()) appUpdateError = readAppUpdatesFileError.description.js
+		if (!readLatestAppUpdateFileError.isNil()) appUpdateError = readLatestAppUpdateFileError.description.js
 
 		try {
 			// @ts-ignore: JXA-ObjC

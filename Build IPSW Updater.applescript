@@ -119,6 +119,11 @@ repeat
 		if (button returned of buildAlertReply is "Build") then
 			repeat while (application appBuildPath is running)
 				activate
+				try
+					do shell script "afplay /System/Library/Sounds/Basso.aiff"
+				on error
+					beep
+				end try
 				display alert "You must Quit " & projectName & " to Build." buttons {"Cancel", "Try Again"} cancel button 1 default button 2
 			end repeat
 			
@@ -162,9 +167,7 @@ repeat
 			set newestInstalledGoogleClosureCompilerPath to (do shell script ("ls -t " & (quoted form of projectFolderPath) & "closure-compiler*.jar | head -1"))
 			set installedGoogleClosureCompileVersion to (do shell script ("java -jar " & (quoted form of newestInstalledGoogleClosureCompilerPath) & " --version | awk -F ': ' '($1 == \"Version\") { print $NF; exit }'"))
 			if (installedGoogleClosureCompileVersion is equal to "") then
-				try
-					do shell script "open 'https://mvnrepository.com/artifact/com.google.javascript/closure-compiler/latest'"
-				end try
+				open location "https://mvnrepository.com/artifact/com.google.javascript/closure-compiler/latest"
 				error "MINIFY JXA ERROR (GOOGLE CLOSURE COMPILER NOT FOUND)"
 			end if
 			
@@ -183,7 +186,7 @@ repeat
 
 Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is currently installed.") buttons {("Continue Build with Google Closure Compiler " & installedGoogleClosureCompileVersion), ("Download Google Closure Compiler " & latestGoogleClosureCompileVersion)} cancel button 1 default button 2
 					set didChooseDownloadLatestGoogleClosureCompiler to true
-					do shell script "open 'https://mvnrepository.com/artifact/com.google.javascript/closure-compiler/latest'"
+					open location "https://mvnrepository.com/artifact/com.google.javascript/closure-compiler/latest"
 				end try
 				
 				if (didChooseDownloadLatestGoogleClosureCompiler) then
@@ -352,6 +355,13 @@ codesign -s 'Developer ID Application' --identifier " & (quoted form of (bundleI
 							
 							-- NOTE: Every command is chained with "&&" so that if anything errors, it all stops and all combined output from every command will be included in the error message.
 							-- Also, the output of "spctl -avv" is checked for "source=Notarized Developer ID" since a signed but unnotarized app could pass the initial assessment (but stapling should have failed before getting the that check anyways).
+							-- And notarization is also verified with "codesign": https://developer.apple.com/forums/thread/128683?answerId=404727022#404727022 & https://developer.apple.com/forums/thread/130560
+							-- Information about using "--deep" and "--strict" options during "codesign" verification:
+							-- https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/resolving_common_notarization_issues#3087735
+							-- https://developer.apple.com/library/archive/technotes/tn2206/_index.html#//apple_ref/doc/uid/DTS40007919-CH1-TNTAG211
+							-- https://developer.apple.com/library/archive/technotes/tn2206/_index.html#//apple_ref/doc/uid/DTS40007919-CH1-TNTAG404
+							-- The "--deep" option is DEPRECATED in macOS 13 Ventura for SIGNING but I don't think it's deprecated for VERIFYING since verification is where it was always really intended to be used (as explained in the note in the last link in the list above).
+							
 							set notarizationOutput to (do shell script ("rm -f " & (quoted form of appZipPathForNotarization) & " " & (quoted form of appZipPath) & " &&
 echo 'Code Signing App...' &&
 codesign -fs 'Developer ID Application' -o runtime --strict " & (quoted form of appBuildPath) & " 2>&1 &&
@@ -367,19 +377,18 @@ Stapling Notarization Ticket to App...' &&
 xcrun stapler staple " & (quoted form of appBuildPath) & " 2>&1 &&
 echo '
 Assessing Notarized App...' &&
-spctl_assess_output=\"$(spctl -avv " & (quoted form of appBuildPath) & " 2>&1)\" &&
+spctl_assess_output=\"$(spctl -avv " & (quoted form of appBuildPath) & " 2>&1; true)\" && # Never exit because of spctl error to always show the output and notarization will be checked explicitly below.
 echo \"${spctl_assess_output}\" &&
-codesign -vv " & (quoted form of appBuildPath) & " 2>&1 &&
+codesign -vv --deep --strict -R '=notarized' --check-notarization " & (quoted form of appBuildPath) & " 2>&1 &&
 echo \"${spctl_assess_output}\" | grep -qxF 'source=Notarized Developer ID' &&
 echo '
 Zipping Notarized App...' &&
 ditto -ck --keepParent --sequesterRsrc --zlibCompressionLevel 9 " & (quoted form of appBuildPath) & " " & (quoted form of appZipPath) & " 2>&1") without altering line endings) -- VERY IMPORTANT to NOT alter line endings so that "awk" can read each line (which needs "\n" instead of "\r").
 							
-							set notarizationLog to ""
 							try
 								set notarizationSubmissionID to (do shell script ("echo " & (quoted form of notarizationOutput) & " | awk '($1 == \"id:\") { print $NF; exit }'"))
 								if (notarizationSubmissionID is not equal to "") then
-									set notarizationLog to ("
+									set notarizationOutput to (notarizationOutput & "
 
 Notarization Log:
 " & (do shell script ("xcrun notarytool log " & notarizationSubmissionID & " --keychain-profile 'notarytool App Specific Password' 2>&1")))
@@ -394,8 +403,15 @@ Notarization Log:
 							
 							waitUntilAwakeAndUnlocked()
 							activate
+							try
+								do shell script "afplay /System/Library/Sounds/Glass.aiff"
+							on error
+								beep
+							end try
 							display alert ("Successfully Notarized & Zipped
-" & projectName & " version " & appVersion & "!") message "Copied SHA512 Checksum of Zipped File (" & appZipChecksum & ") to Clipboard" & notarizationLog
+" & projectName & " version " & appVersion & "!") message "Copied SHA512 Checksum of Zipped File (" & appZipChecksum & ") to Clipboard
+
+" & notarizationOutput
 							
 							try
 								do shell script ("open -R " & (quoted form of appZipPath))
@@ -414,6 +430,11 @@ Notarization Log:
 							
 							waitUntilAwakeAndUnlocked()
 							activate
+							try
+								do shell script "afplay /System/Library/Sounds/Basso.aiff"
+							on error
+								beep
+							end try
 							display alert (projectName & " Notarization Error " & notarizationErrorCode) message (notarizationError & notarizationLog)
 						end try
 					end try
@@ -421,6 +442,11 @@ Notarization Log:
 			on error codeSignError number codeSignErrorCode
 				waitUntilAwakeAndUnlocked()
 				activate
+				try
+					do shell script "afplay /System/Library/Sounds/Basso.aiff"
+				on error
+					beep
+				end try
 				display alert (projectName & " Code Sign Error " & codeSignErrorCode) message codeSignError
 			end try
 		end if
@@ -436,6 +462,11 @@ Notarization Log:
 		if (buildErrorNumber is not equal to -128) then
 			waitUntilAwakeAndUnlocked()
 			activate
+			try
+				do shell script "afplay /System/Library/Sounds/Basso.aiff"
+			on error
+				beep
+			end try
 			display alert (button returned of buildAlertReply) & " Error" message buildErrorMessage
 		end if
 	end try
