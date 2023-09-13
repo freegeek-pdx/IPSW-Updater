@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2023.9.13-1'
+const appVersion = '2023.9.13-2'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -720,7 +720,7 @@ else {
 					// @ts-ignore: JXA-ObjC
 					fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(temporaryFilesFolder, true, {}, $())
 
-				const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -fL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=1`)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdatesJsonProgressOutputFile)} 2>&1 & echo $!`)
+				const downloadAppUpdatesJsonPID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -fL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=1`)} -o ${quoteForShell(appUpdatesJsonFilePath)} > ${quoteForShell(appUpdatesJsonProgressOutputFile)} 2>&1 & echo $!`)
 				curlPIDs.push(downloadAppUpdatesJsonPID)
 
 				try {
@@ -808,7 +808,7 @@ ${newVersionReleaseNotes}`,
 				// But, even if Mac IS NOT awake and unlocked still do the "curl" call to "appUpdatesJsonURL" with the new version parameters,
 				// (but do not wait for it to finish or save the output) just so that the successful app update is still saved in the server log.
 
-				app.doShellScript(`/usr/bin/curl -m 5 -sfL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=2`)} > /dev/null 2>&1 &`) // "just_updated=2" indicates an update when the Mac is asleep or locked (while "just_updated=1" indicates updated while awake an unlocked).
+				app.doShellScript(`/usr/bin/curl --connect-timeout 5 -sfL ${quoteForShell(`${appUpdatesJsonURL}&just_updated=2`)} > /dev/null 2>&1 &`) // "just_updated=2" indicates an update when the Mac is asleep or locked (while "just_updated=1" indicates updated while awake an unlocked).
 			} catch (ignoredError) { /* Ignore */ }
 	} else {
 		// @ts-ignore: JXA
@@ -2050,7 +2050,7 @@ for ( ; ; ) {
 									((userDidCancel && (skippedCount == 0)) ? '🛑 Stopped' : '')
 								)
 							)
-						)}${createVersionsDownloadedSummary(downloadedFiles)}${((skippedCount > 0) ? `${(downloadedFilesCount > 0) ? `
+						)}${createVersionsDownloadedSummary(downloadedFiles)}${((skippedCount > 0) ? `${(failedToDownloadAnyUpdates || (downloadedFilesCount > 0)) ? `
 
 ` : ''}⏭️ Skipped ${skippedCount} Update${((skippedCount == 1) ? '' : 's')}` : '')}${downloadErrorsDisplay}
 
@@ -2598,7 +2598,7 @@ function checkAndInstallAppUpdates() {
 			curlPIDs.splice(0, curlPIDs.length)
 		}
 
-		const downloadLatestAppUpdateJsonPID = app.doShellScript(`/usr/bin/curl -m 5 -fL ${quoteForShell(`${appUpdatesJsonURL}&latest`)} -o ${quoteForShell(latestAppUpdateJsonFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
+		const downloadLatestAppUpdateJsonPID = app.doShellScript(`/usr/bin/curl --connect-timeout 5 -fL ${quoteForShell(`${appUpdatesJsonURL}&latest`)} -o ${quoteForShell(latestAppUpdateJsonFilePath)} > ${quoteForShell(appUpdateProgressOutputFile)} 2>&1 & echo $!`)
 		curlPIDs.push(downloadLatestAppUpdateJsonPID)
 
 		try {
