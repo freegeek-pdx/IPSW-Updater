@@ -120,7 +120,7 @@ repeat
 			repeat while (application appBuildPath is running)
 				activate
 				try
-					do shell script "afplay /System/Library/Sounds/Basso.aiff"
+					do shell script "afplay /System/Library/Sounds/Basso.aiff > /dev/null 2>&1 &"
 				on error
 					beep
 				end try
@@ -155,7 +155,7 @@ repeat
 			-- back into the minified source code when the applet is launched and the minified source code is then run via "eval()".
 			-- This is nothing crazy that couldn't be reversed by someone who wanted to to be able to retrieve the raw minified source code,
 			-- but that doesn't really matter since this project with the un-minified source code all released as open source anyways.
-			-- The purpose of the is more the make the distributed applet not easily editable rather than protecting the source code from being retreived.
+			-- The purpose of the is more the make the distributed applet not easily editable rather than protecting the source code from being retrieved.
 			
 			set jxaSourcePath to (projectFolderPath & projectName & ".jxa")
 			
@@ -367,7 +367,7 @@ echo 'Code Signing App...' &&
 codesign -fs 'Developer ID Application' -o runtime --strict " & (quoted form of appBuildPath) & " 2>&1 &&
 echo '
 Zipping App for Notarization...' &&
-ditto -ck --keepParent " & (quoted form of appBuildPath) & " " & (quoted form of appZipPathForNotarization) & " 2>&1 &&
+ditto -ckvV --keepParent " & (quoted form of appBuildPath) & " " & (quoted form of appZipPathForNotarization) & " 2>&1 &&
 echo '
 Notarizing App...' &&
 xcrun notarytool submit " & (quoted form of appZipPathForNotarization) & " --keychain-profile 'notarytool App Specific Password' --wait 2>&1 &&
@@ -383,7 +383,7 @@ codesign -vv --deep --strict -R '=notarized' --check-notarization " & (quoted fo
 echo \"${spctl_assess_output}\" | grep -qxF 'source=Notarized Developer ID' &&
 echo '
 Zipping Notarized App...' &&
-ditto -ck --keepParent --sequesterRsrc --zlibCompressionLevel 9 " & (quoted form of appBuildPath) & " " & (quoted form of appZipPath) & " 2>&1") without altering line endings) -- VERY IMPORTANT to NOT alter line endings so that "awk" can read each line (which needs "\n" instead of "\r").
+ditto -ckvV --keepParent --sequesterRsrc --zlibCompressionLevel 9 " & (quoted form of appBuildPath) & " " & (quoted form of appZipPath) & " 2>&1") without altering line endings) -- VERY IMPORTANT to NOT alter line endings so that "awk" can read each line (which needs "\n" instead of "\r").
 							
 							try
 								set notarizationSubmissionID to (do shell script ("echo " & (quoted form of notarizationOutput) & " | awk '($1 == \"id:\") { print $NF; exit }'"))
@@ -404,7 +404,7 @@ Notarization Log:
 							waitUntilAwakeAndUnlocked()
 							activate
 							try
-								do shell script "afplay /System/Library/Sounds/Glass.aiff"
+								do shell script "afplay /System/Library/Sounds/Glass.aiff > /dev/null 2>&1 &"
 							on error
 								beep
 							end try
@@ -431,7 +431,7 @@ Notarization Log:
 							waitUntilAwakeAndUnlocked()
 							activate
 							try
-								do shell script "afplay /System/Library/Sounds/Basso.aiff"
+								do shell script "afplay /System/Library/Sounds/Basso.aiff > /dev/null 2>&1 &"
 							on error
 								beep
 							end try
@@ -443,7 +443,7 @@ Notarization Log:
 				waitUntilAwakeAndUnlocked()
 				activate
 				try
-					do shell script "afplay /System/Library/Sounds/Basso.aiff"
+					do shell script "afplay /System/Library/Sounds/Basso.aiff > /dev/null 2>&1 &"
 				on error
 					beep
 				end try
@@ -463,7 +463,7 @@ Notarization Log:
 			waitUntilAwakeAndUnlocked()
 			activate
 			try
-				do shell script "afplay /System/Library/Sounds/Basso.aiff"
+				do shell script "afplay /System/Library/Sounds/Basso.aiff > /dev/null 2>&1 &"
 			on error
 				beep
 			end try

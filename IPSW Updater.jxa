@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2023.2.24-1'
+const appVersion = '2023.9.13-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -2050,7 +2050,7 @@ for ( ; ; ) {
 									((userDidCancel && (skippedCount == 0)) ? '🛑 Stopped' : '')
 								)
 							)
-						)}${createVersionsDownloadedSummary(downloadedFiles)}${((userDidCancel && (skippedCount > 0)) ? `${(downloadedFilesCount > 0) ? `
+						)}${createVersionsDownloadedSummary(downloadedFiles)}${((skippedCount > 0) ? `${(downloadedFilesCount > 0) ? `
 
 ` : ''}⏭️ Skipped ${skippedCount} Update${((skippedCount == 1) ? '' : 's')}` : '')}${downloadErrorsDisplay}
 
@@ -2501,21 +2501,43 @@ function validateCodeSignatureForAppAtPath(validateAppPath) {
 	let spctlAssessErrorCode = -1
 	let spctlAssessDict = {ERROR: 'UNKNOWN SPCTL ASSESS ERROR'}
 	try {
-		// @ts-ignore: JXA-ObjC
-		const spctlAssessParseError = $()
-		// @ts-ignore: JXA-ObjC
-		spctlAssessDict = ObjC.deepUnwrap($.NSPropertyListSerialization.propertyListWithDataOptionsFormatError($(app.doShellScript(`/usr/sbin/spctl -avv --raw ${quoteForShell(validateAppPath)}; exit 0`)).dataUsingEncoding($.NSUTF8StringEncoding), $.NSPropertyListImmutable, null, spctlAssessParseError))
-		// IMPORTANT: Explicitly exiting 0 (success) after running "spctl -a ..." via "doShellScript" because we DO NOT want to rely on the exit code of the "spctl" assessment (since "doShellScript" would throw when the final command exits non-zero),
+		const spctlAssessOutput = app.doShellScript(`/usr/sbin/spctl -avv --raw ${quoteForShell(validateAppPath)} 2>&1; echo "spctl Exit Code: $?"`)
+		// IMPORTANT: Capture both stdout and stderr as well as "echo" the "spctl" the exit code (the "echo" command always exits 0 so this command will never throw an error itself) and then manually extract the plist output.
+		// This is done for multiple reasons, one of which is that we DO NOT want to rely on the exit code of the "spctl" assessment to determine success or failure (since "doShellScript" would throw and error when the final command exits non-zero),
 		// and ALSO DO NOT want to check the "assessment:verdict" in the output dictionary in the checks below because if macOS is set to only allow Mac App Store apps to run the "spctl" assessment will always fail even if the app is notarized.
 		// BUT, if the app got this far to be able to run and load at all it means that a user manually allowed the app regardless of the Mac App Store apps only setting.
-		// But when the app is manually allowed to run in this case the "spctl" assessment still fails. When this happens, it would be silly for the app itself to refuse to run after a user explicitly allowed it to run.
+		// When the app is manually allowed to run in this case the "spctl" assessment still fails. When this happens, it would be silly for the app itself to refuse to run after a user explicitly allowed it to run.
 		// So, will only verify that the "spctl" assessment output shows that the app is properly notarized with the correct identity and not worry about whether or not "spctl" assessment was actually "accepted" or "rejected".
+		// The other reason is that for some errors (such as if the "_CodeSignature" folder is removed) there will be no plist output, and if we don't capture the output in this way to extract and check for plist output then
+		// for those errors the plist parsing would error with "The data couldn't be read because it isn't in the correct format." which is not relevant to "spctl" but is just the result of failing to parse non-existant plist.
+		// This way, if there is no plist, we can just throw the raw combined stdout and stderr output from "spctl" as an error (which will include the extra exit code line) to be able to extract and present the "spctl" exit code and actual error.
 
-		if (!spctlAssessParseError.isNil()) throw spctlAssessParseError
-		spctlAssessPassed = ((spctlAssessDict['assessment:authority']['assessment:authority:source'] == `${verifyNotarization ? 'Notarized ' : ''}Developer ID`) && (spctlAssessDict['assessment:originator'] == `Developer ID Application: Pico Mitchell (${intendedCodeSignatureTeamID})`)) // The "spctl -avv" output on macOS 10.13 High Sierra will only ever specify a source of "Developer ID" even if it's actually notarized while macOS 10.14 Mojave and newer will specify a source of "Notarized Developer ID".
+		const spctlAssessPlistStartIndex = spctlAssessOutput.indexOf('<?xml')
+		const spctlAssessPlistEndIndex = spctlAssessOutput.indexOf('</plist>')
+		if ((spctlAssessPlistStartIndex > -1) && (spctlAssessPlistEndIndex > -1)) {
+			const spctlAssessPlist = spctlAssessOutput.substring(spctlAssessPlistStartIndex, spctlAssessPlistEndIndex + 8)
+
+			// @ts-ignore: JXA-ObjC
+			const spctlAssessPlistParseError = $()
+			// @ts-ignore: JXA-ObjC
+			spctlAssessDict = ObjC.deepUnwrap($.NSPropertyListSerialization.propertyListWithDataOptionsFormatError($(spctlAssessPlist).dataUsingEncoding($.NSUTF8StringEncoding), $.NSPropertyListImmutable, null, spctlAssessPlistParseError))
+
+			if (!spctlAssessPlistParseError.isNil()) throw spctlAssessPlistParseError
+			spctlAssessPassed = ((spctlAssessDict['assessment:authority']['assessment:authority:source'] == `${verifyNotarization ? 'Notarized ' : ''}Developer ID`) && (spctlAssessDict['assessment:originator'] == `Developer ID Application: Pico Mitchell (${intendedCodeSignatureTeamID})`)) // The "spctl -avv" output on macOS 10.13 High Sierra will only ever specify a source of "Developer ID" even if it's actually notarized while macOS 10.14 Mojave and newer will specify a source of "Notarized Developer ID".
+		} else
+			throw new Error(spctlAssessOutput) // As explained above, if there is no plist in the "spctl", throw combined raw combined stdout and stderr output as an error (which will include the extra exit code line).
 	} catch (spctlAssessError) {
-		spctlAssessErrorCode = (spctlAssessError.errorNumber || spctlAssessError.code) // There should never be an "errorNumber" or "message" from the "spctl" "doShellScript" command throwing an error because of explicitly exiting 0 as described above, but keep the checks just in case since it doesn't hurt anything.
-		spctlAssessDict = {ERROR: (spctlAssessError.message || spctlAssessError.localizedDescription.js)}
+		let spctlAssessErrorMessage = (spctlAssessError.message || spctlAssessError.localizedDescription.js)
+		spctlAssessErrorCode = (spctlAssessError.errorNumber || spctlAssessError.code) // There should never be an "errorNumber" from the "spctl" "doShellScript" command throwing an error because of explicitly exiting 0 as described above, but keep the checks just in case since it doesn't hurt anything.
+
+		const spctlAssessExitCodeIndex = spctlAssessErrorMessage.indexOf('spctl Exit Code: ')
+		if (spctlAssessExitCodeIndex > -1) {
+			const spctlAssessExitCode = spctlAssessErrorMessage.substring(spctlAssessExitCodeIndex + 17)
+			spctlAssessErrorMessage = spctlAssessErrorMessage.substring(0, spctlAssessExitCodeIndex).trim()
+			spctlAssessErrorCode = ((spctlAssessErrorCode === undefined) ? spctlAssessExitCode : `${spctlAssessErrorCode} + ${spctlAssessExitCode}`)
+		}
+
+		spctlAssessDict = {ERROR: spctlAssessErrorMessage}
 	}
 
 	if (!csReqValidityPassed || !codesignVerifyPassed || !spctlAssessPassed)
@@ -3052,7 +3074,8 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 
 	if (!excludeProductsArray.includes('iPhone') || !excludeProductsArray.includes('iPad') || !excludeProductsArray.includes('iPod touch') || !excludeProductsArray.includes('Apple TV')) {
 		const versionDescriptions = [
-			'iOS 16 / iPadOS 16 / tvOS 16 and Newer',
+			'iOS 17 / iPadOS 17 / tvOS 17 and Newer',
+			'iOS 16 and Newer	(iPhone 8 - X, iPad 5, iPad Pro 9.7-inch & 1st Gen 12.9-inch)',
 			'iOS 15 and Newer	(iPhone 6s - 7, iPad Air 2, iPad mini 4, iPod touch 7)',
 			'iOS 12 and Newer	(iPhone 5s - 6, iPad Air, iPad mini 2 - 3, iPod touch 6)',
 			'iOS 10 and Newer	(iPhone 5 - 5c, iPad 4)',
@@ -3077,7 +3100,7 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 👉\tWhen HomePod mini (audioOS), T2 Mac (bridgeOS), or Apple Silicon Mac (macOS)
 	are NOT EXCLUDED, their latest IPSW Firmware files will always be downloaded
 	regardless of the included iOS / iPadOS / tvOS version selection chosen here
-	since there is only a single latest version for each one of those OSes.
+	since there is only a single latest version available for each one of those OSes.
 
 ⚠️\tApple Configurator 2 only supports iOS 7 and newer. Restore older versions using ${isCatalinaOrNewer ? 'Finder' : 'iTunes'}.
 \tAlso, older versions of iOS for iPhone 2G (1st Gen) and iPod touch 1 are no longer signed.`,
@@ -3292,7 +3315,7 @@ Then, in the “Allow in the Background” list in the lower portion of the wind
 			const manualPowerScheduleManagementNotes = `${isVenturaOrNewer ?
 	`Although, as of macOS 13 Ventura, the interface to manage the Power Schedule has been removed from “${systemPreferencesOrSettingsName}” and can now only be modified via the “pmset” command line tool, which is how ${appName} has always modified the Power Schedule when you choose to let it do so through these prompts.
 
-Now that there is no longer an interface in “${systemPreferencesOrSettingsName}” for you to change the Power Schedule, you must use the “pmset” command line tool if you want to make any manual changes. To learn how to do that, see the Apple documentation at “https://support.apple.com/guide/mac-help/schedule-your-mac-to-turn-on-or-off-mchl40376151/13.0/mac/13.0” as well as the “pmset” manual by running “man pmset” in Terminal (specificially the “pmset repeat” and “SCHEDULED EVENT ARGUMENTS” sections). Or, you can use the button below to open both the Apple documentation in your default web browser and the “pmset” manual in Terminal.` :
+Now that there is no longer an interface in “${systemPreferencesOrSettingsName}” for you to change the Power Schedule, you must use the “pmset” command line tool if you want to make any manual changes. To learn how to do that, see the Apple documentation at “https://support.apple.com/guide/mac-help/schedule-your-mac-to-turn-on-or-off-mchl40376151/13.0/mac/13.0” as well as the “pmset” manual by running “man pmset” in Terminal (specifically the “pmset repeat” and “SCHEDULED EVENT ARGUMENTS” sections). Or, you can use the button below to open both the Apple documentation in your default web browser and the “pmset” manual in Terminal.` :
 	`The Power Schedule can be manually managed in the “${energySaverOrBatteryPaneName}” section of “${systemPreferencesOrSettingsName}” by clicking ${(isMontereyOrNewer || (isBigSurOrNewer && (energySaverOrBatteryPaneName == 'Battery'))) ? '“Schedule” in the list on the left of the window' : 'the “Schedule…” button in the bottom right corner of the window'}. You can use the button below to go straight to the Power Schedule in the ${energySaverOrBatteryPaneName} ${systemPreferencesOrSettingsName}.`}`
 
 			for ( ; ; ) {
@@ -4174,7 +4197,7 @@ function getPreference(key, intendedType = 'string', isReattempt = false) {
 		else if (returnPreferenceValue < 4) returnPreferenceValue = 4 // iOS 4 supports the same devices as iOS 1 through iOS 3, except for the iPhone 2G (1st Gen) and iPod touch 1 which supported iOS 3 but that's no longer signed.
 		else if (returnPreferenceValue == 11) returnPreferenceValue = 12 // iOS 12 supports the same devices as iOS 11.
 		else if ((returnPreferenceValue == 13) || (returnPreferenceValue == 14)) returnPreferenceValue = 15 // iOS 15 supports the same devices as iOS 13 and iOS 14.
-		else if (returnPreferenceValue > 16) returnPreferenceValue = 16 // iOS 16 is the latest version at this time (and the newest version listed in the "versionDescriptions" array).
+		else if (returnPreferenceValue > 17) returnPreferenceValue = 17 // iOS 17 is the latest version at this time (and the newest version listed in the "versionDescriptions" array).
 	} else if ((returnPreferenceValue !== undefined) && (key == 'ExcludeProducts')) {
 		const validatedExcludedProducts = []
 		for (const thisProductType of everyProductType)
