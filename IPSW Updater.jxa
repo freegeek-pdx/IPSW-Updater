@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2023.9.13-2'
+const appVersion = '2023.9.28-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -1206,7 +1206,9 @@ try {
 		// The "Apple Silicon Virtual Machine" (VirtualMac2,1) device is ignored because it should always be the same version as all the other actual hardware devices, and there's no need to include "Apple Virtual Machine 1" in the "displayDeviceNames" for macOS downloads.
 
 		const thisDeviceObject = allFirmwareInfo.devices[thisModelID]
-		const firmwaresForDevice = thisDeviceObject.firmwares
+
+		// @ts-ignore: JXA-ObjC
+		const firmwaresForDevice = thisDeviceObject.firmwares.sort((thisFirmware, thatFirmware) => $(thatFirmware.version).compareOptions(thisFirmware.version, $.NSNumericSearch)) // Manually sort firmwares by version (newest to oldest) since the default sort lists macOS 13.6 above macOS 14.0 (presumably because the "uploaddate" for 13.6 is one day after 14.0 for some reason).
 
 		for (let thisFirmwareIndex = 0; thisFirmwareIndex < firmwaresForDevice.length; thisFirmwareIndex ++) {
 			const thisFirmware = firmwaresForDevice[thisFirmwareIndex]
