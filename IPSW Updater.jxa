@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2023.9.28-1'
+const appVersion = '2024.6.19-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -143,6 +143,7 @@ const isCatalinaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVers
 const isBigSurOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 11, minorVersion: 0, patchVersion: 0})
 const isMontereyOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 12, minorVersion: 0, patchVersion: 0})
 const isVenturaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 13, minorVersion: 0, patchVersion: 0})
+const isSonomaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 14, minorVersion: 0, patchVersion: 0})
 
 try {
 	// IMPORTANT: On each launch, confirm the running app is properly signed (and notarized, when possible on macOS 10.14 Mojave and newer).
@@ -566,7 +567,7 @@ if (versionLastRun != appVersion) {
 	setPreference('LastAppInstall', lastInstallInfo, 'dict')
 }
 
-const everyProductType = ['iPhone', 'iPad', 'iPod touch', 'Apple TV', 'HomePod mini', 'T2 Mac (iBridge Firmware)', 'Apple Silicon Mac']
+const everyProductType = ['iPhone', 'iPad', 'iPod touch', 'Apple TV', 'HomePod mini', 'Apple Vision', 'T2 Mac (iBridge Firmware)', 'Apple Silicon Mac']
 const everyDayOfTheWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const defaultAutoLaunchHour = 18
 const defaultAutoLaunchMinute = 30 // NOTE: DO NOT change this to less that 15 since the auto-wake time will always be 15 minutes before and that math only does a basic subtraction of these minutes without worrying about moving to a previous hour.
@@ -641,9 +642,9 @@ You can set which IPSW Firmware files to download based on versions as well as p
 
 iPhone, iPad, and iPod touch IPSW Firmware files will be stored within iTunes Software Updates folders at “${libraryITunesFolder}” since they will be found by both ${isCatalinaOrNewer ? 'Finder' : 'iTunes'} and Apple Configurator at that location.
 
-Apple TV, HomePod mini, and T2 and Apple Silicon Mac IPSW Firmware files will be stored within the Apple Configurator Firmware folder at “${appleConfiguratorFirmwareFolder}”. This is because unlike iPhone, iPad, and iPod touch IPSW Firmware files, Apple Configurator will not detect or use IPSW Firmware files for Apple TVs or HomePod minis from the iTunes Software Updates folders. Also, T2 and Apple Silicon Macs cannot be restored by ${isCatalinaOrNewer ? 'Finder' : 'iTunes'} and can only be restored by Apple Configurator when they are put into DFU mode.
+Apple TV, HomePod mini, Apple Vision, and T2 and Apple Silicon Mac IPSW Firmware files will be stored within the Apple Configurator Firmware folder at “${appleConfiguratorFirmwareFolder}”. This is because unlike iPhone, iPad, and iPod touch IPSW Firmware files, Apple Configurator will not detect or use IPSW Firmware files in the iTunes Software Updates folders for any other device types.${(isSonomaOrNewer ? '' : ` Also, T2 and Apple Silicon Macs cannot be restored by ${isCatalinaOrNewer ? 'Finder' : 'iTunes'} and can only be restored by Apple Configurator when they are put into DFU mode.`)}
 
-Any IPSW Firmware files that are already in these folders will become managed by ${appName}. That means that IPSW Firmware files in these locations will be moved to the Trash (or deleted, based on your ${settingsOrPreferencesName.toLowerCase()}) when they become out-of-date after an update for them has been downloaded by ${appName}. Also, as described above, any iPhone, iPad, and iPod touch IPSW Firmware files that are currently in the Apple Configurator Firmware folder will be moved into their correct iTunes Software Updates folder and any Apple TV or HomePod IPSW Firmware files in the iTunes Software Updates folders will be moved into the Apple Configurator Firmware folder. Finally, any IPSW Firmware files currently in these folders that are out-of-date but are still signed by Apple will be left alone and any that are no longer signed by Apple will be moved to the Trash (or deleted). ${appName} will check for unsigned IPSW Firmware files each time it runs, so existing files may be trashed (or deleted) in the future if and when Apple no longer signs them.
+Any IPSW Firmware files that are already in these folders will become managed by ${appName}. That means that IPSW Firmware files in these locations will be moved to the Trash (or deleted, based on your ${settingsOrPreferencesName.toLowerCase()}) when they become out-of-date after an update for them has been downloaded by ${appName}. Also, as described above, any iPhone, iPad, and iPod touch IPSW Firmware files that are currently in the Apple Configurator Firmware folder will be moved into their correct iTunes Software Updates folder and any IPSW Firmware files in the iTunes Software Updates folders for any other device types will be moved into the Apple Configurator Firmware folder. Finally, any IPSW Firmware files currently in these folders that are out-of-date but are still signed by Apple will be left alone and any that are no longer signed by Apple will be moved to the Trash (or deleted). ${appName} will check for unsigned IPSW Firmware files each time it runs, so existing files may be trashed (or deleted) in the future if and when Apple no longer signs them.
 
 To use ${appName}, you must agree to let it manage your iTunes Software Updates and Apple Configurator Firmware folders and to update itself (app updates are checked on each launch). Once you agree, you'll be prompted to choose your desired ${settingsOrPreferencesName.toLowerCase()}, such as Excluded Product Types, Included iOS / iPadOS / tvOS Versions, Trash or Delete Outdated Files, Auto-Launch Schedule, and Start Up Schedule.`,
 				`${appName}  —  Welcome`,
@@ -952,17 +953,19 @@ if (macIsAwakeAndUnlocked()) { // Skip launch window if asleep or locked (just s
 		if (iOSincludedVersions.length > 0)
 			includedVersionsDisplay += `${iOSincludedVersions.join(' / ')} ${currentIncludedVersions} and Newer`
 
-		if (!currentExcludedProducts.includes('HomePod mini') || !currentExcludedProducts.includes('T2 Mac (iBridge Firmware)') || !currentExcludedProducts.includes('Apple Silicon Mac')) {
+		if (!currentExcludedProducts.includes('HomePod mini') || !currentExcludedProducts.includes('Apple Vision') || !currentExcludedProducts.includes('T2 Mac (iBridge Firmware)') || !currentExcludedProducts.includes('Apple Silicon Mac')) {
 			const otherOSincludedVersions = []
 			if (!currentExcludedProducts.includes('HomePod mini'))
 				otherOSincludedVersions.push('audioOS')
+			if (!currentExcludedProducts.includes('Apple Vision'))
+				otherOSincludedVersions.push('visionOS')
 			if (!currentExcludedProducts.includes('T2 Mac (iBridge Firmware)'))
 				otherOSincludedVersions.push('bridgeOS')
 			if (!currentExcludedProducts.includes('Apple Silicon Mac'))
 				otherOSincludedVersions.push('macOS')
 
 			if (includedVersionsDisplay) includedVersionsDisplay += '\n\t\t'
-			includedVersionsDisplay += `Latest ${((otherOSincludedVersions.length <= 2) ? otherOSincludedVersions.join(' and ') : `${otherOSincludedVersions.slice(0, -1).join(', ')}, and ${otherOSincludedVersions.slice(-1)[0]}`)}`
+			includedVersionsDisplay += `Latest ${((otherOSincludedVersions.length <= 2) ? otherOSincludedVersions.join(' and ') : `${otherOSincludedVersions.slice(0, -1).join(', ')},\n\t\tand ${otherOSincludedVersions.slice(-1)[0]}`)}`
 		}
 
 		try {
@@ -1052,7 +1055,10 @@ try {
 
 try {
 	if (fileManager.fileExistsAtPath(libraryITunesFolder)) {
-		const productTypesToMoveOutOfLibraryITunesSoftwareUpdatesFolders = ['Apple TV', 'HomePod']
+		const productTypesToMoveOutOfLibraryITunesSoftwareUpdatesFolders = ['Apple TV', 'HomePod', 'iBridge', 'Mac']
+		// Starting on macOS 14 Sonoma, Finder can restore T2 and Apple Silicon Macs in DFU mode.
+		// Their IPSW Firmware files are saved into "~/Library/iTunes/iBridge Software Updates" and "~/Library/iTunes/Mac Software Updates",
+		// but Apple Configurator will not find or use them at those locations, so move them into the Apple Configurator Firmware folder.
 
 		for (const thisProductType of productTypesToMoveOutOfLibraryITunesSoftwareUpdatesFolders)
 			if (fileManager.fileExistsAtPath(`${libraryITunesFolder}/${thisProductType} Software Updates`)) {
@@ -1071,7 +1077,7 @@ try {
 			}
 	}
 } catch (moveOutOfLibraryITunesSoftwareUpdatesFoldersError) {
-	debugLog('Move Apple TV and HomePod Firmware Out Of iTunes Software Updates Folders Error', moveOutOfLibraryITunesSoftwareUpdatesFoldersError)
+	debugLog('Move Apple TV, HomePod, iBridge, and Apple Silicon Mac Firmware Out Of iTunes Software Updates Folders Error', moveOutOfLibraryITunesSoftwareUpdatesFoldersError)
 
 	if (!userDidCancel) userDidCancel = (moveOutOfLibraryITunesSoftwareUpdatesFoldersError.errorNumber === -128)
 }
@@ -1215,36 +1221,42 @@ try {
 			const thisFirmwareFileName = decodeURIComponent(thisFirmware.filename)
 
 			if ((thisFirmwareIndex == 0) && thisFirmware.signed) {
-				if (!uniqueFirmwares[thisFirmwareFileName]) {
-					uniqueFirmwares[thisFirmwareFileName] = {}
+				const thisFirmwareURL = thisFirmware.url.replace('http://updates-http.cdn-apple.com/', 'https://updates.cdn-apple.com/') // Always download from HTTPS URL even if HTTP URL is listed.
+				if (thisFirmwareURL.startsWith('http://appldnld.apple.com/') || thisFirmwareURL.startsWith('https://updates.cdn-apple.com/')) { // Only trust known Apple URLs.
+					if (!uniqueFirmwares[thisFirmwareFileName]) {
+						uniqueFirmwares[thisFirmwareFileName] = {}
 
-					uniqueFirmwares[thisFirmwareFileName].url = thisFirmware.url
-					uniqueFirmwares[thisFirmwareFileName].size = thisFirmware.size
-					uniqueFirmwares[thisFirmwareFileName].sha1sum = thisFirmware.sha1sum
-					uniqueFirmwares[thisFirmwareFileName].version = thisFirmware.version
-				}
+						uniqueFirmwares[thisFirmwareFileName].url = thisFirmwareURL
+						uniqueFirmwares[thisFirmwareFileName].size = thisFirmware.size
+						uniqueFirmwares[thisFirmwareFileName].sha1sum = thisFirmware.sha1sum
+						uniqueFirmwares[thisFirmwareFileName].version = thisFirmware.version
+					}
 
-				if (!uniqueFirmwares[thisFirmwareFileName].modelIdentifiers)
-					uniqueFirmwares[thisFirmwareFileName].modelIdentifiers = []
-				uniqueFirmwares[thisFirmwareFileName].modelIdentifiers.push(thisModelID)
-				uniqueFirmwares[thisFirmwareFileName].modelIdentifiers.sort()
+					if (!uniqueFirmwares[thisFirmwareFileName].modelIdentifiers)
+						uniqueFirmwares[thisFirmwareFileName].modelIdentifiers = []
+					uniqueFirmwares[thisFirmwareFileName].modelIdentifiers.push(thisModelID)
+					uniqueFirmwares[thisFirmwareFileName].modelIdentifiers.sort()
 
-				if (!uniqueFirmwares[thisFirmwareFileName].deviceNames)
-					uniqueFirmwares[thisFirmwareFileName].deviceNames = []
-				if (!uniqueFirmwares[thisFirmwareFileName].deviceNames.includes(thisDeviceObject.name)) {
-					uniqueFirmwares[thisFirmwareFileName].deviceNames.push(thisDeviceObject.name)
-					uniqueFirmwares[thisFirmwareFileName].deviceNames.sort()
-				}
+					if (!uniqueFirmwares[thisFirmwareFileName].deviceNames)
+						uniqueFirmwares[thisFirmwareFileName].deviceNames = []
+					if (!uniqueFirmwares[thisFirmwareFileName].deviceNames.includes(thisDeviceObject.name)) {
+						uniqueFirmwares[thisFirmwareFileName].deviceNames.push(thisDeviceObject.name)
+						// @ts-ignore: JXA-ObjC
+						uniqueFirmwares[thisFirmwareFileName].deviceNames.sort((thisDeviceNameElement, thatDeviceNameElement) => $(thisDeviceNameElement).compareOptions(thatDeviceNameElement, $.NSCaseInsensitiveSearch))
+					}
 
-				if (!uniqueFirmwares[thisFirmwareFileName].baseDeviceNames)
-					uniqueFirmwares[thisFirmwareFileName].baseDeviceNames = []
-				let deviceNameParts = thisDeviceObject.name.split(' (')
-				if (deviceNameParts.length == 1) deviceNameParts = thisDeviceObject.name.split(',')
-				const baseDeviceName = deviceNameParts[0]
-				const baseDeviceNameLower = baseDeviceName.toLowerCase()
-				if (!uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.some(thisBaseDeviceNameElement => thisBaseDeviceNameElement.toLowerCase() === baseDeviceNameLower))
-					uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.push(baseDeviceName)
-				uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.sort()
+					if (!uniqueFirmwares[thisFirmwareFileName].baseDeviceNames)
+						uniqueFirmwares[thisFirmwareFileName].baseDeviceNames = []
+					let deviceNameParts = thisDeviceObject.name.split(' (')
+					if (deviceNameParts.length == 1) deviceNameParts = thisDeviceObject.name.split(',')
+					const baseDeviceName = (deviceNameParts[0].startsWith('iMac ') ? 'iMac' : deviceNameParts[0]) // So that all Apple Silicon iMac models (such as "iMac 24-inch") are grouped into the "iMac" base name.
+					const baseDeviceNameLower = baseDeviceName.toLowerCase()
+					if (!uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.some(thisBaseDeviceNameElement => thisBaseDeviceNameElement.toLowerCase() === baseDeviceNameLower))
+						uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.push(baseDeviceName)
+					// @ts-ignore: JXA-ObjC
+					uniqueFirmwares[thisFirmwareFileName].baseDeviceNames.sort((thisBaseDeviceNameElement, thatBaseDeviceNameElement) => $(thisBaseDeviceNameElement).compareOptions(thatBaseDeviceNameElement, $.NSCaseInsensitiveSearch))
+				} else
+					debugLog('Invalid IPSW URL', thisFirmwareURL)
 			} else if (!thisFirmware.signed && !unsignedFirmwares.includes(thisFirmwareFileName))
 				unsignedFirmwares.push(thisFirmwareFileName)
 		}
@@ -1299,13 +1311,18 @@ let oldManagedFirmware = getPreference('ManagedFirmwares', 'dict')
 if (!(oldManagedFirmware instanceof Object) || Array.isArray(oldManagedFirmware))
 	oldManagedFirmware = {}
 
-const sortedUniqueDeviceNames = Object.keys(uniqueDeviceNamesForFirmwareFileNames).sort()
+// @ts-ignore: JXA-ObjC
+const sortedUniqueDeviceNames = Object.keys(uniqueDeviceNamesForFirmwareFileNames).sort((thisUniqueDeviceNameElement, thatUniqueDeviceNameElement) => $(thisUniqueDeviceNameElement).compareOptions(thatUniqueDeviceNameElement, $.NSCaseInsensitiveSearch))
 const sortedUniqueFirmwareFileNames = Object.keys(uniqueFirmwares).sort()
 const uniqueFirmwaresCount = sortedUniqueFirmwareFileNames.length
 const excludedProducts = getPreference('ExcludeProducts', 'string array') // This returned excluded product will always be sanitized to a valid value by "getPreference()".
 const includedVersions = getPreference('IncludeVersions', 'int') // This returned version will always be sanitized to a valid value by "getPreference()".
 let firmwaresNeedingUpdate = {}
 let totalFirmwaresToUpdateSize = 0
+
+//debugDialog(uniqueDeviceNamesForFirmwareFileNames)
+//debugDialog(sortedUniqueDeviceNames)
+//debugDialog(sortedUniqueFirmwareFileNames)
 
 if (uniqueFirmwaresCount > 0) {
 	try {
@@ -1339,7 +1356,7 @@ if (uniqueFirmwaresCount > 0) {
 			const thisITunesSoftwareUpdatesFilePath = `${uniqueFirmwares[thisFirmwareFileName].productSoftwareUpdatesFolder}/${thisFirmwareFileName}`
 			if (thisProductType != 'Unknown' && !excludedProducts.includes(thisProductType) &&
 				// @ts-ignore: JXA-ObjC
-				(thisProductType.includes('HomePod') || thisProductType.includes('Mac') || ($(uniqueFirmwares[thisFirmwareFileName].version).compareOptions(includedVersions.toString(), $.NSNumericSearch) >= 0)) &&
+				(thisProductType.includes('HomePod') || thisProductType.includes('Vision') || thisProductType.includes('Mac') || ($(uniqueFirmwares[thisFirmwareFileName].version).compareOptions(includedVersions.toString(), $.NSNumericSearch) >= 0)) &&
 				(
 					!fileManager.fileExistsAtPath(thisITunesSoftwareUpdatesFilePath) ||
 					// @ts-ignore: JXA-ObjC
@@ -2214,6 +2231,7 @@ function createVersionsDownloadedSummary(downloadedFiles, indentLevel = 0) {
 		else if (thisDownloadedFirmwareFileName.startsWith('iPad')) thisOSname = 'iPadOS'
 		else if (thisDownloadedFirmwareFileName.startsWith('AppleTV')) thisOSname = 'tvOS'
 		else if (thisDownloadedFirmwareFileName.startsWith('Audio')) thisOSname = 'audioOS'
+		else if (thisDownloadedFirmwareFileName.startsWith('Apple_Vision')) thisOSname = 'visionOS'
 		else if (thisDownloadedFirmwareFileName.startsWith('iBridge')) thisOSname = 'bridgeOS'
 		else if (thisDownloadedFirmwareFileName.startsWith('UniversalMac')) thisOSname = 'macOS'
 
@@ -2249,6 +2267,7 @@ ${indentTabs}🍏 Version${(onlyOneVersionDownloaded ? '' : 's')} Downloaded:`
 			if (versionsDownloadedForEachOS.iPadOS) versionsDownloadedDisplay += `\n\t${indentTabs}iPadOS ${versionsDownloadedForEachOS.iPadOS.join(', ')}`
 			if (versionsDownloadedForEachOS.tvOS) versionsDownloadedDisplay += `\n\t${indentTabs}tvOS ${versionsDownloadedForEachOS.tvOS.join(', ')}`
 			if (versionsDownloadedForEachOS.audioOS) versionsDownloadedDisplay += `\n\t${indentTabs}audioOS ${versionsDownloadedForEachOS.audioOS.join(', ')}`
+			if (versionsDownloadedForEachOS.visionOS) versionsDownloadedDisplay += `\n\t${indentTabs}visionOS ${versionsDownloadedForEachOS.visionOS.join(', ')}`
 			if (versionsDownloadedForEachOS.bridgeOS) versionsDownloadedDisplay += `\n\t${indentTabs}bridgeOS ${versionsDownloadedForEachOS.bridgeOS.join(', ')}`
 			if (versionsDownloadedForEachOS.macOS) versionsDownloadedDisplay += `\n\t${indentTabs}macOS ${versionsDownloadedForEachOS.macOS.join(', ')}`
 		}
@@ -3076,7 +3095,8 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 
 	if (!excludeProductsArray.includes('iPhone') || !excludeProductsArray.includes('iPad') || !excludeProductsArray.includes('iPod touch') || !excludeProductsArray.includes('Apple TV')) {
 		const versionDescriptions = [
-			'iOS 17 / iPadOS 17 / tvOS 17 and Newer',
+			'iOS 18 / iPadOS 18 / tvOS 18 and Newer',
+			'iOS 17 and Newer	(iPad 6, iPad Pro 10.5-inch & 2nd Gen 12.9-inch)',
 			'iOS 16 and Newer	(iPhone 8 - X, iPad 5, iPad Pro 9.7-inch & 1st Gen 12.9-inch)',
 			'iOS 15 and Newer	(iPhone 6s - 7, iPad Air 2, iPad mini 4, iPod touch 7)',
 			'iOS 12 and Newer	(iPhone 5s - 6, iPad Air, iPad mini 2 - 3, iPod touch 6)',
@@ -3099,10 +3119,11 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 				withTitle: `${appName} ${settingsOrPreferencesName}  —  Include iOS / iPadOS / tvOS Versions`,
 				withPrompt: `🍏\tWhich iOS / iPadOS / tvOS versions would you like to include?
 
-👉\tWhen HomePod mini (audioOS), T2 Mac (bridgeOS), or Apple Silicon Mac (macOS)
-	are NOT EXCLUDED, their latest IPSW Firmware files will always be downloaded
-	regardless of the included iOS / iPadOS / tvOS version selection chosen here
-	since there is only a single latest version available for each one of those OSes.
+👉\tWhen HomePod mini (audioOS), Apple Vision (visionOS), T2 Mac (bridgeOS),
+\tor Apple Silicon Mac (macOS) are NOT EXCLUDED, their latest IPSW Firmware files
+\twill always be downloaded regardless of the included iOS / iPadOS / tvOS version
+\tselection chosen here since there is only a single latest version available for
+\teach one of those OSes.
 
 ⚠️\tApple Configurator 2 only supports iOS 7 and newer. Restore older versions using ${isCatalinaOrNewer ? 'Finder' : 'iTunes'}.
 \tAlso, older versions of iOS for iPhone 2G (1st Gen) and iPod touch 1 are no longer signed.`,
@@ -4199,7 +4220,7 @@ function getPreference(key, intendedType = 'string', isReattempt = false) {
 		else if (returnPreferenceValue < 4) returnPreferenceValue = 4 // iOS 4 supports the same devices as iOS 1 through iOS 3, except for the iPhone 2G (1st Gen) and iPod touch 1 which supported iOS 3 but that's no longer signed.
 		else if (returnPreferenceValue == 11) returnPreferenceValue = 12 // iOS 12 supports the same devices as iOS 11.
 		else if ((returnPreferenceValue == 13) || (returnPreferenceValue == 14)) returnPreferenceValue = 15 // iOS 15 supports the same devices as iOS 13 and iOS 14.
-		else if (returnPreferenceValue > 17) returnPreferenceValue = 17 // iOS 17 is the latest version at this time (and the newest version listed in the "versionDescriptions" array).
+		else if (returnPreferenceValue > 18) returnPreferenceValue = 18 // iOS 18 is the latest version at this time (and the newest version listed in the "versionDescriptions" array).
 	} else if ((returnPreferenceValue !== undefined) && (key == 'ExcludeProducts')) {
 		const validatedExcludedProducts = []
 		for (const thisProductType of everyProductType)
