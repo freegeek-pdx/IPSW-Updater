@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2024.6.19-1'
+const appVersion = '2024.9.18-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -144,6 +144,7 @@ const isBigSurOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersio
 const isMontereyOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 12, minorVersion: 0, patchVersion: 0})
 const isVenturaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 13, minorVersion: 0, patchVersion: 0})
 const isSonomaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 14, minorVersion: 0, patchVersion: 0})
+const isSequoiaOrNewer = processInfo.isOperatingSystemAtLeastVersion({majorVersion: 15, minorVersion: 0, patchVersion: 0})
 
 try {
 	// IMPORTANT: On each launch, confirm the running app is properly signed (and notarized, when possible on macOS 10.14 Mojave and newer).
@@ -616,7 +617,7 @@ if (!fileManager.fileExistsAtPath(libraryITunesFolder))
 	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(libraryITunesFolder, true, {}, $())
 
 const appleConfiguratorFirmwareFolder = `${userLibraryFolder}/Group Containers/K36BKF7T3D.group.com.apple.configurator/Library/Caches/Firmware`
-if (!fileManager.fileExistsAtPath(appleConfiguratorFirmwareFolder))
+if (!fileManager.fileExistsAtPath(appleConfiguratorFirmwareFolder) && !needsFullDiskAccess()) // On macOS 15 Sequoia, there is a new "would like to access data from other apps" prompt that comes up when accessing the Apple Configurator Group Container each run unless the app has Full Disk Access.
 	// @ts-ignore: JXA-ObjC
 	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(appleConfiguratorFirmwareFolder, true, {}, $())
 
@@ -672,10 +673,17 @@ To use ${appName}, you must agree to let it manage your iTunes Software Updates 
 		}
 	}
 
+	promptForFullDiskAccessIfNeeded()
+
 	promptForPreferences()
 
 	setPreference('FirstRun', false, 'bool')
-}
+} else
+	promptForFullDiskAccessIfNeeded()
+
+if (!fileManager.fileExistsAtPath(appleConfiguratorFirmwareFolder))
+	// @ts-ignore: JXA-ObjC
+	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(appleConfiguratorFirmwareFolder, true, {}, $())
 
 Progress.description = `
 ${(justInstalledUpdate ? `✅	Updated to Version ${appVersion}!` : (isFirstRun ? `📲	Welcome to ${appName}!` : '🔄	Checking for App Updates'))}`
@@ -2182,9 +2190,9 @@ function displayAlertOrDialogDependingOnOS(titleText, messageText, windowTitle, 
 	// On macOS 10.15 Catalina and older, the alert window size is very similar to the dialog window size in that is it wide with left aligned text and look good for the long detailed messages displayed by IPSW Updater.
 	// On macOS 11 Big Sur and macOS 12 Monterey, alerts will only ever be a "compact" layout with a narrow window and centered text (and long text could need to be scrolled).
 	// This style looks very bad for the long detailed messages displayed by IPSW Updater, so a dialog will be used instead on those versions of macOS.
-	// On macOS 13 Ventura, alerts with long text will be displayed in a new "expanded" layout with a wide and tall window (https://developer.apple.com/videos/play/wwdc2022/10074/?time=728)
+	// On macOS 13 Ventura and newer, alerts with long text will be displayed in a new "expanded" layout with a wide and tall window (https://developer.apple.com/videos/play/wwdc2022/10074/?time=728)
 	// which is similar to the older macOS 10.15 Catalina and older alert style and doesn't have centered text (and is not scrollable).
-	// macOS 13 Ventura will still use the "compact" layout for short alerts and will automatically switch to the "expanded" layout when the text is long.
+	// macOS 13 Ventura and newer will still use the "compact" layout for short alerts and will automatically switch to the "expanded" layout when the text is long.
 	// The exact parameters of when the "expanded" layout is triggered is not totally obvious since it could either be some number of lines, or just the total amount of text.
 	// This "expanded" layout looks good and is usable for the long detailed messages displayed by IPSW Updater so it will be used for certain long messages where approriate.
 
@@ -3036,6 +3044,96 @@ ${((appUpdateError instanceof Object) ? JSON.stringify(appUpdateError, Object.ge
 						givingUpAfter: 30
 					}
 				)
+		}
+	}
+}
+
+function needsFullDiskAccess() {
+	if (isSequoiaOrNewer) { // On macOS 15 Sequoia, there is a new "would like to access data from other apps" prompt that comes up when accessing the Apple Configurator Group Container each run unless the app has Full Disk Access.
+		// @ts-ignore: JXA-ObjC
+		const tccDatabaseIsReadableRef = $()
+		// @ts-ignore: JXA-ObjC
+		try { $.NSURL.fileURLWithPath('/Library/Application Support/com.apple.TCC/TCC.db').getResourceValueForKeyError(tccDatabaseIsReadableRef, $.NSURLIsReadableKey, $()) } catch (ignoredError) { /* Ignore */ }
+		// NOTE: The global TCC.db file is only readable if the app has Full Disk Access.
+
+		return !tccDatabaseIsReadableRef.js
+	}
+
+	return false
+}
+
+function promptForFullDiskAccessIfNeeded() {
+	if (isSequoiaOrNewer) { // On macOS 15 Sequoia, there is a new "would like to access data from other apps" prompt that comes up when accessing the Apple Configurator Group Container each run unless the app has Full Disk Access.
+		let promptedForFullDiskAccess = false
+		let justRevealedAppAndSettings = false
+
+		for ( ; ; ) {
+			while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
+				// @ts-ignore: JXA
+				delay(15)
+
+			if (justRevealedAppAndSettings) {
+				justRevealedAppAndSettings = false
+
+				// @ts-ignore: JXA
+				delay(5)
+			}
+
+			if (needsFullDiskAccess()) {
+				app.activate()
+
+				try {
+					const revealButtonTitle = `Reveal ${appName} & Full Disk Access Settings`
+					const reCheckButtonTitle = 'Re-Check Full Disk Access'
+
+					const needsFullDiskAccessAlertReply = app.displayAlert(`Full Disk Access Must Be Granted to ${appName}
+
+Starting on macOS 15 Sequoia, ${appName} requires Full Disk Access to be able to save IPSW Firmware files into the Apple Configurator Firmware folder.`,
+						{
+							message: `You can grant ${appName} Full Disk Access in “${systemPreferencesOrSettingsName}” by selecting “Privacy & Security” in the list on the left, and then selecting “Full Disk Access” in the list on the right. Or, you can use the button below to go straight to the Full Disk Access section in ${systemPreferencesOrSettingsName}.
+
+Then, drag-and-drop the “${appName}” app from Finder into the “Full Disk Access” list on the right and authenticate the action if needed. Or, click the “+” button at the bottom of the list, authenticate if needed, and then locate and select the app. Confirm the toggle switch to the right of “${appName}” is enabled after the app has been added.
+
+After “${appName}” is enabled in the “Full Disk Access” list, re-check Full Disk Access using the button below, or quit and relaunch ${appName}.`,
+							as: 'critical',
+							buttons: [(promptedForFullDiskAccess ? revealButtonTitle : reCheckButtonTitle), 'Quit', (promptedForFullDiskAccess ? reCheckButtonTitle : revealButtonTitle)],
+							cancelButton: 2,
+							defaultButton: 3,
+							givingUpAfter: 60
+						}
+					)
+
+					promptedForFullDiskAccess = true
+
+					if (needsFullDiskAccessAlertReply.buttonReturned == revealButtonTitle) {
+						// @ts-ignore: JXA-ObjC
+						sharedWorkspace.openURL($.NSURL.URLWithString('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'))
+
+						// @ts-ignore: JXA-ObjC
+						try { sharedWorkspace.activateFileViewerSelectingURLs($.NSArray.arrayWithObject($.NSURL.fileURLWithPath(appPath))) } catch (ignoredError) { app.beep() }
+
+						justRevealedAppAndSettings = true
+					}
+				} catch (ignoredError) {
+					cleanUpAndQuitEarly()
+				}
+			} else {
+				if (promptedForFullDiskAccess) {
+					// @ts-ignore: JXA-ObjC
+					$.NSSound.soundNamed('Glass').play
+
+					app.activate()
+					app.displayAlert(`✅\n\n${appName} Was Successfully Granted Full Disk Access`,
+						{
+							buttons: ['Continue'],
+							defaultButton: 1,
+							givingUpAfter: 5
+						}
+					)
+				}
+
+				break
+			}
 		}
 	}
 }

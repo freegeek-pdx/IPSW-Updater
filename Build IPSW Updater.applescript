@@ -163,21 +163,18 @@ repeat
 			if (appVersion is equal to "") then error "FAILED TO GET APP VERSION"
 			
 			-- Make sure Google Closure Compiler is installed, and check that it's the latest version and prompt if an update is available.
-			-- https://developers.google.com/closure/compiler/ & https://mvnrepository.com/artifact/com.google.javascript/closure-compiler & https://github.com/google/closure-compiler
+			-- https://developers.google.com/closure/compiler/ & https://search.maven.org/artifact/com.google.javascript/closure-compiler & https://mvnrepository.com/artifact/com.google.javascript/closure-compiler & https://github.com/google/closure-compiler
 			set newestInstalledGoogleClosureCompilerPath to (do shell script ("ls -t " & (quoted form of projectFolderPath) & "closure-compiler*.jar | head -1"))
 			set installedGoogleClosureCompileVersion to (do shell script ("java -jar " & (quoted form of newestInstalledGoogleClosureCompilerPath) & " --version | awk -F ': ' '($1 == \"Version\") { print $NF; exit }'"))
 			if (installedGoogleClosureCompileVersion is equal to "") then
-				open location "https://mvnrepository.com/artifact/com.google.javascript/closure-compiler/latest"
+				open location "https://maven-badges.herokuapp.com/maven-central/com.google.javascript/closure-compiler"
 				error "MINIFY JXA ERROR (GOOGLE CLOSURE COMPILER NOT FOUND)"
 			end if
 			
-			-- NOTE: Could not figure out how to get the latest version from the "mvnrepository.com" page, so use the source code Tags from the GitHub API instead.
-			-- The latest version should always be index 17 (18th item) in the JSON Tags array because the first 17 items will all be an older "webpack-v2..." style naming.
-			-- Also, it's fine to use "plutil -extract [keypath] raw" for JSON parsing/extraction since we will only ever be building on macOS 12 Monterey or newer where the "raw" output option is available.
-			set latestGoogleClosureCompileVersion to (do shell script "curl -m 5 -sfL 'https://api.github.com/repos/google/closure-compiler/tags' | plutil -extract 17.name raw -; exit 0") -- Always succeed to catch to error ourselves instead of showing the "plutil" error.
-			if (latestGoogleClosureCompileVersion does not start with "v2") then error "MINIFY JXA ERROR (FAILED TO GET LATEST GOOGLE CLOSURE COMPILER VERSION)"
-			
-			if (installedGoogleClosureCompileVersion is not equal to latestGoogleClosureCompileVersion) then
+			set latestGoogleClosureCompileVersion to (do shell script "curl -m 5 --retry 2 -sfw '%{redirect_url}' -o /dev/null 'https://maven-badges.herokuapp.com/maven-central/com.google.javascript/closure-compiler' | awk -F '/' '{ print $7; exit }'")
+			if (latestGoogleClosureCompileVersion does not start with "v2") then
+				beep
+			else if (installedGoogleClosureCompileVersion is not equal to latestGoogleClosureCompileVersion) then
 				set didChooseDownloadLatestGoogleClosureCompiler to false
 				try
 					waitUntilAwakeAndUnlocked()
@@ -186,7 +183,7 @@ repeat
 
 Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is currently installed.") buttons {("Continue Build with Google Closure Compiler " & installedGoogleClosureCompileVersion), ("Download Google Closure Compiler " & latestGoogleClosureCompileVersion)} cancel button 1 default button 2
 					set didChooseDownloadLatestGoogleClosureCompiler to true
-					open location "https://mvnrepository.com/artifact/com.google.javascript/closure-compiler/latest"
+					open location "https://maven-badges.herokuapp.com/maven-central/com.google.javascript/closure-compiler"
 				end try
 				
 				if (didChooseDownloadLatestGoogleClosureCompiler) then
@@ -408,10 +405,17 @@ Notarization Log:
 							on error
 								beep
 							end try
-							display alert ("Successfully Notarized & Zipped
-" & projectName & " version " & appVersion & "!") message "Copied SHA512 Checksum of Zipped File (" & appZipChecksum & ") to Clipboard
+							set notarizationSuccessfulReply to choose from list (paragraphs of notarizationOutput) with prompt ("Successfully Notarized & Zipped " & projectName & " version " & appVersion & "!
 
-" & notarizationOutput
+Copied SHA512 Checksum of Zipped File to Clipboard:
+" & appZipChecksum & "
+
+Notarization Output:") cancel button name "Quit" OK button name "Continue" with title (name of me) with empty selection allowed without multiple selections allowed
+							
+							if (notarizationSuccessfulReply is false) then
+								quit
+								delay 10
+							end if
 							
 							try
 								do shell script ("open -R " & (quoted form of appZipPath))
@@ -435,7 +439,14 @@ Notarization Log:
 							on error
 								beep
 							end try
-							display alert (projectName & " Notarization Error " & notarizationErrorCode) message (notarizationError & notarizationLog)
+							set notarizationErrorReply to choose from list (paragraphs of (notarizationError & notarizationLog)) with prompt (projectName & " Notarization Error " & notarizationErrorCode & "
+
+Notarization Error:") cancel button name "Quit" OK button name "Continue" with title (name of me) with empty selection allowed without multiple selections allowed
+							
+							if (notarizationErrorReply is false) then
+								quit
+								delay 10
+							end if
 						end try
 					end try
 				end if
