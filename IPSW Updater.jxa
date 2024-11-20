@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2024.9.18-1'
+const appVersion = '2024.11.20-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -3068,10 +3068,6 @@ function promptForFullDiskAccessIfNeeded() {
 		let justRevealedAppAndSettings = false
 
 		for ( ; ; ) {
-			while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
-				// @ts-ignore: JXA
-				delay(15)
-
 			if (justRevealedAppAndSettings) {
 				justRevealedAppAndSettings = false
 
@@ -3080,6 +3076,10 @@ function promptForFullDiskAccessIfNeeded() {
 			}
 
 			if (needsFullDiskAccess()) {
+				while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
+					// @ts-ignore: JXA
+					delay(15)
+
 				app.activate()
 
 				try {
@@ -3119,6 +3119,10 @@ After “${appName}” is enabled in the “Full Disk Access” list, re-check F
 				}
 			} else {
 				if (promptedForFullDiskAccess) {
+					while (!macIsAwakeAndUnlocked()) // AppleScript dialogs will timeout early if Mac is asleep when it's displayed. So, wait until Mac is awake to display the dialog.
+						// @ts-ignore: JXA
+						delay(15)
+
 					// @ts-ignore: JXA-ObjC
 					$.NSSound.soundNamed('Glass').play
 
