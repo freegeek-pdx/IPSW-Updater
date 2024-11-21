@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2024.11.20-1'
+const appVersion = '2024.11.20-2'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -1230,7 +1230,7 @@ try {
 
 			if ((thisFirmwareIndex == 0) && thisFirmware.signed) {
 				const thisFirmwareURL = thisFirmware.url.replace('http://updates-http.cdn-apple.com/', 'https://updates.cdn-apple.com/') // Always download from HTTPS URL even if HTTP URL is listed.
-				if (thisFirmwareURL.startsWith('http://appldnld.apple.com/') || thisFirmwareURL.startsWith('https://updates.cdn-apple.com/')) { // Only trust known Apple URLs.
+				if (thisFirmwareURL.startsWith('http://appldnld.apple.com/') || thisFirmwareURL.startsWith('https://secure-appldnld.apple.com/') || thisFirmwareURL.startsWith('https://updates.cdn-apple.com/')) { // Only trust known Apple URLs.
 					if (!uniqueFirmwares[thisFirmwareFileName]) {
 						uniqueFirmwares[thisFirmwareFileName] = {}
 
