@@ -167,11 +167,11 @@ repeat
 			set newestInstalledGoogleClosureCompilerPath to (do shell script ("ls -t " & (quoted form of projectFolderPath) & "closure-compiler*.jar | head -1"))
 			set installedGoogleClosureCompileVersion to (do shell script ("java -jar " & (quoted form of newestInstalledGoogleClosureCompilerPath) & " --version | awk -F ': ' '($1 == \"Version\") { print $NF; exit }'"))
 			if (installedGoogleClosureCompileVersion is equal to "") then
-				open location "https://maven-badges.herokuapp.com/maven-central/com.google.javascript/closure-compiler"
+				open location "https://maven-badges.sml.io/maven-central/com.google.javascript/closure-compiler"
 				error "MINIFY JXA ERROR (GOOGLE CLOSURE COMPILER NOT FOUND)"
 			end if
 			
-			set latestGoogleClosureCompileVersion to (do shell script "curl -m 5 --retry 2 -sfw '%{redirect_url}' -o /dev/null 'https://maven-badges.herokuapp.com/maven-central/com.google.javascript/closure-compiler' | awk -F '/' '{ print $7; exit }'")
+			set latestGoogleClosureCompileVersion to (do shell script "curl -m 5 --retry 2 -sfw '%{redirect_url}' -o /dev/null 'https://maven-badges.sml.io/maven-central/com.google.javascript/closure-compiler' | awk -F '/' '{ print $7; exit }'")
 			if (latestGoogleClosureCompileVersion does not start with "v2") then
 				beep
 			else if (installedGoogleClosureCompileVersion is not equal to latestGoogleClosureCompileVersion) then
@@ -183,7 +183,7 @@ repeat
 
 Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is currently installed.") buttons {("Continue Build with Google Closure Compiler " & installedGoogleClosureCompileVersion), ("Download Google Closure Compiler " & latestGoogleClosureCompileVersion)} cancel button 1 default button 2
 					set didChooseDownloadLatestGoogleClosureCompiler to true
-					open location "https://maven-badges.herokuapp.com/maven-central/com.google.javascript/closure-compiler"
+					open location "https://maven-badges.sml.io/maven-central/com.google.javascript/closure-compiler"
 				end try
 				
 				if (didChooseDownloadLatestGoogleClosureCompiler) then

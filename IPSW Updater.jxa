@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2024.11.20-2'
+const appVersion = '2025.8.6-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -219,11 +219,12 @@ standardUserDefaults.registerDefaults({
 	AppJustAutoUpdated: false,
 	AppUpdateAvailable: false,
 	ExcludeProducts: [],
-	IncludeVersions: 7,
+	IncludeVersions: 15,
 	ManagedFirmwares: {},
 	FirmwareUpdatesAvailable: 0,
 	AcknowledgedSignificantResults: true,
 	ImmediatelyDeleteOutdatedFirmwares: false,
+	DeleteAppleConfiguratorTemporaryFiles: false,
 	ForceDialogWindowStyle: false,
 })
 
@@ -579,6 +580,7 @@ const autoWakeTypeTranslation = {wakepoweron: 'Start Up'/* or Wake*/, wake: 'Wak
 const dateFormatOptions = {weekday: 'short', month: 'long', day: 'numeric', year: 'numeric'}
 
 let shouldImmediatelyDeleteOutdatedFirmwares = getPreference('ImmediatelyDeleteOutdatedFirmwares', 'bool')
+let shouldDeleteAppleConfiguratorTemporaryFiles = getPreference('DeleteAppleConfiguratorTemporaryFiles', 'bool')
 
 const isFirstRun = getPreference('FirstRun', 'bool')
 let userDidCancel = false
@@ -993,7 +995,8 @@ if (macIsAwakeAndUnlocked()) { // Skip launch window if asleep or locked (just s
 		${includedVersionsDisplay}
 
 	🗑 Outdated IPSW Files:
-		${shouldImmediatelyDeleteOutdatedFirmwares ? 'Immediately Deleted' : 'Trashed'}
+		${shouldImmediatelyDeleteOutdatedFirmwares ? 'Immediately Deleted' : 'Trashed'}${shouldDeleteAppleConfiguratorTemporaryFiles ? `
+		and Apple Configurator Temporary Files Deleted` : ''}
 
 	⏰ Auto-Launch Schedule:
 		${currentAutoLaunchScheduleDisplay}
@@ -1064,7 +1067,7 @@ try {
 try {
 	if (fileManager.fileExistsAtPath(libraryITunesFolder)) {
 		const productTypesToMoveOutOfLibraryITunesSoftwareUpdatesFolders = ['Apple TV', 'HomePod', 'iBridge', 'Mac']
-		// Starting on macOS 14 Sonoma, Finder can restore T2 and Apple Silicon Macs in DFU mode.
+		// On macOS 14 Sonoma and newer, Finder can restore T2 and Apple Silicon Macs in DFU mode.
 		// Their IPSW Firmware files are saved into "~/Library/iTunes/iBridge Software Updates" and "~/Library/iTunes/Mac Software Updates",
 		// but Apple Configurator will not find or use them at those locations, so move them into the Apple Configurator Firmware folder.
 
@@ -1088,6 +1091,24 @@ try {
 	debugLog('Move Apple TV, HomePod, iBridge, and Apple Silicon Mac Firmware Out Of iTunes Software Updates Folders Error', moveOutOfLibraryITunesSoftwareUpdatesFoldersError)
 
 	if (!userDidCancel) userDidCancel = (moveOutOfLibraryITunesSoftwareUpdatesFoldersError.errorNumber === -128)
+}
+
+if (shouldDeleteAppleConfiguratorTemporaryFiles) {
+	const appleConfiguratorTemporaryRestoreFolder = `${userLibraryFolder}/Containers/com.apple.configurator.xpc.DeviceService/Data/tmp`
+	if (fileManager.fileExistsAtPath(appleConfiguratorTemporaryRestoreFolder)) {
+		debugLog('Deleting Apple Configurator Temporary Restore Folder')
+
+		// @ts-ignore: JXA-ObjC
+		try { fileManager.removeItemAtPathError(appleConfiguratorTemporaryRestoreFolder, $()) } catch (ignoredError) { /* Ignore */ }
+	}
+
+	const appleConfiguratorTemporaryDownloadFolder = `${userLibraryFolder}/Containers/com.apple.configurator.xpc.InternetService/Data/tmp`
+	if (fileManager.fileExistsAtPath(appleConfiguratorTemporaryDownloadFolder)) {
+		debugLog('Deleting Apple Configurator Temporary Download Folder')
+
+		// @ts-ignore: JXA-ObjC
+		try { fileManager.removeItemAtPathError(appleConfiguratorTemporaryDownloadFolder, $()) } catch (ignoredError) { /* Ignore */ }
+	}
 }
 
 debugLog('Starting to Check for IPSW Firmware Updates')
@@ -1282,6 +1303,7 @@ try {
 			}
 
 		if (thisDisplayDeviceNames == 'iBridge2') thisDisplayDeviceNames = 'iBridge (for T2 Macs)'
+		else if (thisDisplayDeviceNames.includes('Mac')) thisDisplayDeviceNames = `Apple Silicon ${thisDisplayDeviceNames}`
 
 		uniqueFirmwares[thisFirmwareFileName].displayDeviceNames = thisDisplayDeviceNames
 		uniqueDeviceNamesForFirmwareFileNames[thisDisplayDeviceNames] = thisFirmwareFileName
@@ -1355,8 +1377,11 @@ if (uniqueFirmwaresCount > 0) {
 
 			const firmwaresNeedingUpdateSoFarCount = Object.keys(firmwaresNeedingUpdate).length
 
+			const thisDisplayDeviceNames = uniqueFirmwares[thisFirmwareFileName].displayDeviceNames
+			const thisDisplayDeviceNamesTruncated = ((thisDisplayDeviceNames.length > 81) ? `${thisDisplayDeviceNames.slice(0, 40)}…${thisDisplayDeviceNames.slice(thisDisplayDeviceNames.length - 40)}` : thisDisplayDeviceNames)
+
 			Progress.additionalDescription = `
-️🔍 Checking ${Progress.completedUnitCount} of ${uniqueFirmwaresCount}: ${uniqueFirmwares[thisFirmwareFileName].displayDeviceNames}
+️🔍 Checking ${Progress.completedUnitCount} of ${uniqueFirmwaresCount}: ${thisDisplayDeviceNamesTruncated}
 
 📲 ${firmwaresNeedingUpdateSoFarCount} Available Update${((firmwaresNeedingUpdateSoFarCount == 1) ? '' : 's')} Found for IPSW Firmware Files So Far…`
 
@@ -1416,7 +1441,10 @@ if (firmwaresNeedingUpdateCount > 0) {
 	Progress.totalUnitCount = (totalFirmwaresToUpdateSize / 100)
 }
 
-for (const thisFirmwareFileName in firmwaresNeedingUpdate)
+for (const thisFirmwareFileName in firmwaresNeedingUpdate) {
+	const thisDisplayDeviceNames = firmwaresNeedingUpdate[thisFirmwareFileName].displayDeviceNames
+	const thisDisplayDeviceNamesTruncated = ((thisDisplayDeviceNames.length > 81) ? `${thisDisplayDeviceNames.slice(0, 40)}…${thisDisplayDeviceNames.slice(thisDisplayDeviceNames.length - 40)}` : thisDisplayDeviceNames)
+
 	try {
 		setProgressStopButtonEnabled(false)
 
@@ -1427,8 +1455,6 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 
 		actualProgressCount ++
 		const progressBeforeDownload = Progress.completedUnitCount
-
-		const thisDisplayDeviceNames = firmwaresNeedingUpdate[thisFirmwareFileName].displayDeviceNames
 
 		const thisProductSoftwareUpdatesFolder = firmwaresNeedingUpdate[thisFirmwareFileName].productSoftwareUpdatesFolder
 		const iTunesSoftwareUpdatesFilePath = `${thisProductSoftwareUpdatesFolder}/${thisFirmwareFileName}`
@@ -1442,7 +1468,7 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate)
 
 		wakeMacUp()
 
-		Progress.description = `${actualProgressCount} of ${firmwaresNeedingUpdateCount}: ${thisDisplayDeviceNames}`
+		Progress.description = `${actualProgressCount} of ${firmwaresNeedingUpdateCount}: ${thisDisplayDeviceNamesTruncated}`
 		Progress.additionalDescription = `
 📲 Downloading: ${thisFirmwareFileNameDisplay}
 
@@ -1720,7 +1746,7 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 						{
 							message: 'Remaining updates will be skipped in 30 seconds…',
 							as: 'critical',
-							buttons: [`Just Skip “${firmwaresNeedingUpdate[thisFirmwareFileName].displayDeviceNames}”`, 'Skip Remaining Updates'],
+							buttons: [`Just Skip “${thisDisplayDeviceNamesTruncated}”`, 'Skip Remaining Updates'],
 							cancelButton: 1,
 							defaultButton: 2,
 							givingUpAfter: 30
@@ -1749,6 +1775,7 @@ ${hourGlass} ${progressPercentage}% Downloaded: ${formatBytes(downloadedFileSize
 			}
 		}
 	}
+}
 
 for ( ; ; ) {
 	try {
@@ -3088,7 +3115,7 @@ function promptForFullDiskAccessIfNeeded() {
 
 					const needsFullDiskAccessAlertReply = app.displayAlert(`Full Disk Access Must Be Granted to ${appName}
 
-Starting on macOS 15 Sequoia, ${appName} requires Full Disk Access to be able to save IPSW Firmware files into the Apple Configurator Firmware folder.`,
+On macOS 15 Sequoia and newer, ${appName} requires Full Disk Access to be able to save IPSW Firmware files into the Apple Configurator Firmware folder.`,
 						{
 							message: `You can grant ${appName} Full Disk Access in “${systemPreferencesOrSettingsName}” by selecting “Privacy & Security” in the list on the left, and then selecting “Full Disk Access” in the list on the right. Or, you can use the button below to go straight to the Full Disk Access section in ${systemPreferencesOrSettingsName}.
 
@@ -3197,7 +3224,8 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 
 	if (!excludeProductsArray.includes('iPhone') || !excludeProductsArray.includes('iPad') || !excludeProductsArray.includes('iPod touch') || !excludeProductsArray.includes('Apple TV')) {
 		const versionDescriptions = [
-			'iOS 18 / iPadOS 18 / tvOS 18 and Newer',
+			'iOS 26 / iPadOS 26 / tvOS 26 and Newer',
+			'iOS 18 and Newer	(iPhone XS & XR, iPad 7)',
 			'iOS 17 and Newer	(iPad 6, iPad Pro 10.5-inch & 2nd Gen 12.9-inch)',
 			'iOS 16 and Newer	(iPhone 8 - X, iPad 5, iPad Pro 9.7-inch & 1st Gen 12.9-inch)',
 			'iOS 15 and Newer	(iPhone 6s - 7, iPad Air 2, iPad mini 4, iPod touch 7)',
@@ -3266,6 +3294,34 @@ Outdated IPSW Firmware files are currently set to be ${shouldImmediatelyDeleteOu
 	} catch (ignoredError) {
 		shouldImmediatelyDeleteOutdatedFirmwares = !shouldImmediatelyDeleteOutdatedFirmwares
 		setPreference('ImmediatelyDeleteOutdatedFirmwares', shouldImmediatelyDeleteOutdatedFirmwares, 'bool')
+	}
+
+	app.activate()
+	try {
+		const deleteAppleConfiguratorTemporaryFilesDialogButtons = ['Yes, Delete Apple Configurator Temporary Files', 'No, Leave Apple Configurator Temporary Files Alone']
+		if (shouldDeleteAppleConfiguratorTemporaryFiles) deleteAppleConfiguratorTemporaryFilesDialogButtons.reverse()
+		app.displayDialog(`🗑\tWould you like to delete Apple Configurator temporary files at the beginning of each run?
+
+When Apple Configurator performs a restore, the IPSW Firmware file is extracted into a temporary location and sometimes those temporary files can get left behind.
+
+Over time, those temporary files could potentially accumulate and fill up the free space on your internal drive. To avoid this issue, ${appName} can delete these Apple Configurator temporary files at the beginning of each run.
+
+Apple Configurator temporary files that ${shouldDeleteAppleConfiguratorTemporaryFiles ? 'will' : 'can'} be deleted are stored at the following locations:
+• ${userLibraryFolder}/Containers/com.apple.configurator.xpc.DeviceService/Data/tmp
+• ${userLibraryFolder}/Containers/com.apple.configurator.xpc.InternetService/Data/tmp
+
+Apple Configurator temporary files are currently set to be ${shouldDeleteAppleConfiguratorTemporaryFiles ? 'deleted' : 'left alone'}.`,
+			{
+				withTitle: `${appName} ${settingsOrPreferencesName}  —  Apple Configurator Temporary Files`,
+				withIcon: 'note',
+				buttons: deleteAppleConfiguratorTemporaryFilesDialogButtons,
+				cancelButton: 1,
+				defaultButton: 2,
+			}
+		)
+	} catch (ignoredError) {
+		shouldDeleteAppleConfiguratorTemporaryFiles = !shouldDeleteAppleConfiguratorTemporaryFiles
+		setPreference('DeleteAppleConfiguratorTemporaryFiles', shouldDeleteAppleConfiguratorTemporaryFiles, 'bool')
 	}
 
 	let setAutoLaunchDialogTitle = `⏰\tWould you like ${appName} to run\n\tautomatically at a scheduled time?`
@@ -4322,7 +4378,8 @@ function getPreference(key, intendedType = 'string', isReattempt = false) {
 		else if (returnPreferenceValue < 4) returnPreferenceValue = 4 // iOS 4 supports the same devices as iOS 1 through iOS 3, except for the iPhone 2G (1st Gen) and iPod touch 1 which supported iOS 3 but that's no longer signed.
 		else if (returnPreferenceValue == 11) returnPreferenceValue = 12 // iOS 12 supports the same devices as iOS 11.
 		else if ((returnPreferenceValue == 13) || (returnPreferenceValue == 14)) returnPreferenceValue = 15 // iOS 15 supports the same devices as iOS 13 and iOS 14.
-		else if (returnPreferenceValue > 18) returnPreferenceValue = 18 // iOS 18 is the latest version at this time (and the newest version listed in the "versionDescriptions" array).
+		else if ((returnPreferenceValue > 18) && (returnPreferenceValue < 26)) returnPreferenceValue = 26 // At WWDC25, Apple announced all future OS versioning will be year-based, so iOS 26 followed right after iOS 18.
+		else if (returnPreferenceValue > 26) returnPreferenceValue = 26 // iOS 26 is the latest version at this time (and the newest version listed in the "versionDescriptions" array).
 	} else if ((returnPreferenceValue !== undefined) && (key == 'ExcludeProducts')) {
 		const validatedExcludedProducts = []
 		for (const thisProductType of everyProductType)
