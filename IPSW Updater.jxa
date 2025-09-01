@@ -28,7 +28,7 @@
 // 10.12.2+ Compatible Emoji List: https://emojipedia.org/apple/ios-10.2/ (To make sure that only emoji that are available on at least macOS 10.13 High Sierra are used.)
 // Emoji Used: 🛑⚙️🚫🗑⏰🔌👤✅🔄⚖️🔍📲⏳⌛️⏭️🍏↩️↪️🗓💤⚠️❌👉📝⤴️👍⏱️📌📏
 
-const appVersion = '2025.8.6-1'
+const appVersion = '2025.9.1-1'
 
 // @ts-ignore: JXA-ObjC
 ObjC.import('unistd') // For "getuid" function.
@@ -3298,7 +3298,7 @@ Outdated IPSW Firmware files are currently set to be ${shouldImmediatelyDeleteOu
 
 	app.activate()
 	try {
-		const deleteAppleConfiguratorTemporaryFilesDialogButtons = ['Yes, Delete Apple Configurator Temporary Files', 'No, Leave Apple Configurator Temporary Files Alone']
+		const deleteAppleConfiguratorTemporaryFilesDialogButtons = ['Delete Apple Configurator Temporary Files', 'Leave Apple Configurator Temporary Files Alone']
 		if (shouldDeleteAppleConfiguratorTemporaryFiles) deleteAppleConfiguratorTemporaryFilesDialogButtons.reverse()
 		app.displayDialog(`🗑\tWould you like to delete Apple Configurator temporary files at the beginning of each run?
 

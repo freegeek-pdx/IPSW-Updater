@@ -288,6 +288,7 @@ mv " & (quoted form of (appBuildPath & "/Contents/Resources/applet.rsrc")) & " "
 
 rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/applet.icns")) & "
 plutil -replace CFBundleIconFile -string " & (quoted form of projectName) & " " & quotedBuiltAppInfoPlistPath & "
+plutil -replace CFBundleIconName -string " & (quoted form of projectName) & " " & quotedBuiltAppInfoPlistPath & "
 
 ditto " & (quoted form of (projectFolderPath & projectName & " Resources/")) & " " & (quoted form of (appBuildPath & "/Contents/Resources/")) & "
 rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/.DS_Store")) & "
