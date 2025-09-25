@@ -127,7 +127,7 @@ repeat
 				display alert "You must Quit " & projectName & " to Build." buttons {"Cancel", "Try Again"} cancel button 1 default button 2
 			end repeat
 			
-			try -- IPSW Updater should never have any TCC permissions, but clear them just in case to always reproduce any un-intented prompts for a new build
+			try -- Reset TCC permissions to always test requesting them when needed.
 				do shell script ("tccutil reset All " & (quoted form of (bundleIdentifierPrefix & projectNameForBundleID)))
 			end try
 			
@@ -149,13 +149,13 @@ repeat
 				end try
 			end try
 			
-			-- Since JXA cannot be compiled as Run-Only like regular AppleScript can and I wanted to be able to distribute the applet in a way that the source could not be edited.
+			-- NOTE: JXA cannot be compiled as Run-Only like regular AppleScript can and I wanted to be able to distribute the applet in a way that the source could not be edited.
 			-- To do this, I'm using Google Closure Compiler to minify the JXA source code, and then compressing that minified source with gzip and then base64 encoding that compressed data.
 			-- The resuling base64 encoded string of the gzipped and minified source code is stored within a JXA wrapper script and decoded and decompressed
 			-- back into the minified source code when the applet is launched and the minified source code is then run via "eval()".
 			-- This is nothing crazy that couldn't be reversed by someone who wanted to to be able to retrieve the raw minified source code,
-			-- but that doesn't really matter since this project with the un-minified source code all released as open source anyways.
-			-- The purpose of the is more the make the distributed applet not easily editable rather than protecting the source code from being retrieved.
+			-- but that doesn't really matter since this project with the un-minified source code is all released as open source anyways.
+			-- The purpose of this is more to make the distributed applet not easily editable rather than protecting the source code from being retrieved.
 			
 			set jxaSourcePath to (projectFolderPath & projectName & ".jxa")
 			
@@ -263,7 +263,9 @@ plutil -replace LSMinimumSystemVersion -string '10.13' " & quotedBuiltAppInfoPli
 plutil -replace LSMultipleInstancesProhibited -bool true " & quotedBuiltAppInfoPlistPath & "
 
 plutil -replace NSHumanReadableCopyright -string " & (quoted form of ("Copyright © " & (year of (current date)) & " Free Geek
-Designed and Developed by Pico Mitchell")) & " " & quotedBuiltAppInfoPlistPath & "
+Designed and Developed by Pico Mitchell
+
+App Icon is “Phone with Arrow” from Fluent Emoji by Microsoft licensed under the MIT License")) & " " & quotedBuiltAppInfoPlistPath & "
 
 # Force English to be able to remove menu items by their English titles (and no text within the app is localized anyways).
 plutil -replace CFBundleDevelopmentRegion -string 'en_US' " & quotedBuiltAppInfoPlistPath & "
@@ -288,7 +290,7 @@ mv " & (quoted form of (appBuildPath & "/Contents/Resources/applet.rsrc")) & " "
 
 rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/applet.icns")) & "
 plutil -replace CFBundleIconFile -string " & (quoted form of projectName) & " " & quotedBuiltAppInfoPlistPath & "
-plutil -replace CFBundleIconName -string " & (quoted form of projectName) & " " & quotedBuiltAppInfoPlistPath & "
+plutil -replace CFBundleIconName -string 'AppIcon' " & quotedBuiltAppInfoPlistPath & "
 
 ditto " & (quoted form of (projectFolderPath & projectName & " Resources/")) & " " & (quoted form of (appBuildPath & "/Contents/Resources/")) & "
 rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/.DS_Store")) & "
