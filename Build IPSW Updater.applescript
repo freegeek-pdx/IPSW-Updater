@@ -21,7 +21,6 @@
 
 use AppleScript version "2.7"
 use scripting additions
-use framework "Foundation"
 
 set bundleIdentifierPrefix to "org.freegeek."
 
@@ -309,7 +308,7 @@ touch " & (quoted form of appBuildPath) & "
 # When on macOS 12 Monterey and older, the 'AssociatedBundleIdentifiers' will just be ignored and the 'Launch IPSW Updater' will function the same as if we directly specified '/usr/bin/open' with the path to the app in the LaunchAgent.
 # Search for 'AssociatedBundleIdentifiers' in the 'IPSW Updater.jxa' script to see the LaunchAgent creation code.
 echo '#!/bin/sh
-/usr/bin/open -na \"${0%/Contents/*}\"' > " & (quoted form of (appBuildPath & "/Contents/Resources/Launch " & projectName)) & "
+/usr/bin/open -na \"${0%/Contents/*}\" --args \"$@\"' > " & (quoted form of (appBuildPath & "/Contents/Resources/Launch " & projectName)) & "
 chmod +x " & (quoted form of (appBuildPath & "/Contents/Resources/Launch " & projectName)) & "
 codesign -s 'Developer ID Application' --identifier " & (quoted form of (bundleIdentifierPrefix & "Launch-" & projectNameForBundleID)) & " --strict " & (quoted form of (appBuildPath & "/Contents/Resources/Launch " & projectName)))
 			

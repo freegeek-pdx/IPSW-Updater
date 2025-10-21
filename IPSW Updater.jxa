@@ -31,7 +31,7 @@
 
 // @ts-nocheck: Do not check for TypeScript errors since there's a lot of JXA and JXA-ObjC code that would incorrectly show errors.
 
-const appVersion = '2025.9.25-1'
+const appVersion = '2025.10.21-1'
 
 ObjC.import('unistd') // For "getuid" function.
 ObjC.import('Security') // For "SecStaticCodeCheckValidity" and other functions for code signature validation.
@@ -3096,8 +3096,11 @@ After “${appName}” is enabled in the “Full Disk Access” list, re-check F
 
 					$.NSSound.soundNamed('Glass').play
 
+					const tabOrLinebreaks = (isTahoeOrNewer ? '\t' : '\n\n')
+					const indentedLinebreakOrOnlyLinebreak = (isTahoeOrNewer ? '\n\0\t' : '\n')
+
 					app.activate()
-					app.displayAlert(`✅\n\n${appName} Was Successfully Granted Full Disk Access`,
+					app.displayAlert(`✅${tabOrLinebreaks}${appName}${indentedLinebreakOrOnlyLinebreak}Successfully Granted${indentedLinebreakOrOnlyLinebreak}Full Disk Access`,
 						{
 							buttons: ['Continue'],
 							defaultButton: 1,
