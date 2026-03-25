@@ -31,7 +31,7 @@
 
 // @ts-nocheck: Do not check for TypeScript errors since there's a lot of JXA and JXA-ObjC code that would incorrectly show errors.
 
-const appVersion = '2025.10.21-1'
+const appVersion = '2026.3.25-1'
 
 ObjC.import('unistd') // For "getuid" function.
 ObjC.import('Security') // For "SecStaticCodeCheckValidity" and other functions for code signature validation.
@@ -2239,7 +2239,14 @@ function displayAlertOrDialogDependingOnOS(titleText, messageText, windowTitle, 
 	if (defaultButton) dialogOrAlertProperties.defaultButton = defaultButton
 	if (givingUpAfter) dialogOrAlertProperties.givingUpAfter = givingUpAfter
 
-	if (!getPreference('ForceDialogWindowStyle', 'bool') && (!isBigSurOrNewer || isVenturaOrNewer)) {
+	if ((isBigSurOrNewer && !isVenturaOrNewer) || getPreference('ForceDialogWindowStyle', 'bool')) {
+		if (windowTitle) dialogOrAlertProperties.withTitle = windowTitle
+		if (icon == 'informational') icon = 'note'
+		else if (['critical', 'warning'].includes(icon)) icon = 'caution'
+		if (icon) dialogOrAlertProperties.withIcon = icon
+
+		return app.displayDialog(`${titleText}${((titleText && messageText) ? '\n\n\n' : '')}${(messageText) ? messageText : ''}`, dialogOrAlertProperties)
+	} else {
 		if (isVenturaOrNewer) {
 			// NOTE: One BIG catch with the macOS 11 Big Sur and newer alert style is that all leading whitespace for each line will be trimmed.
 			// This makes sense so that centered text always looks decent, but that leading whitespace will STILL be trimmed when the new
@@ -2247,22 +2254,15 @@ function displayAlertOrDialogDependingOnOS(titleText, messageText, windowTitle, 
 			// Since the messages displayed by IPSW Updater rely on tab indented formatting to look correct, this trimming behavior is worked around by replacing the first
 			// TAB on each line with NUL+TAB so that the line will no longer start with whitespace (since it will start with a NUL char instead) and therefore will NOT be trimmed.
 
-			if (titleText.includes('\t')) titleText = titleText.replace(/^\t/gm, '\0\t')
-			if (messageText.includes('\t')) messageText = messageText.replace(/^\t/gm, '\0\t')
+			if (titleText && titleText.includes('\t')) titleText = titleText.replace(/^\t/gm, '\0\t')
+			if (messageText && messageText.includes('\t')) messageText = messageText.replace(/^\t/gm, '\0\t')
 		}
 
 		if (messageText) dialogOrAlertProperties.message = messageText
-		if ((icon == 'caution') || (icon == 'stop') || (icon == 'critical') || (icon == 'warning')) dialogOrAlertProperties.as = 'critical'
+		if (['caution', 'stop', 'critical', 'warning'].includes(icon)) dialogOrAlertProperties.as = 'critical'
 		// Do not need to explicitly set "as" to "informational" if "note" is specified since it is the default.
 
 		return app.displayAlert(titleText, dialogOrAlertProperties)
-	} else {
-		if (windowTitle) dialogOrAlertProperties.withTitle = windowTitle
-		if (icon == 'informational') icon = 'note'
-		if ((icon == 'critical') || (icon == 'warning')) icon = 'caution'
-		if (icon) dialogOrAlertProperties.withIcon = icon
-
-		return app.displayDialog(`${titleText}${((titleText && messageText) ? '\n\n' : '')}${messageText}`, dialogOrAlertProperties)
 	}
 }
 
@@ -3028,11 +3028,15 @@ ${((appUpdateError instanceof Object) ? JSON.stringify(appUpdateError, Object.ge
 
 function needsFullDiskAccess() {
 	if (isSequoiaOrNewer) { // On macOS 15 Sequoia, there is a new "would like to access data from other apps" prompt that comes up when accessing the Apple Configurator Group Container each run unless the app has Full Disk Access.
-		const tccDatabaseIsReadableRef = $()
-		try { $.NSURL.fileURLWithPath('/Library/Application Support/com.apple.TCC/TCC.db').getResourceValueForKeyError(tccDatabaseIsReadableRef, $.NSURLIsReadableKey, $()) } catch (ignoredError) { /* Ignore */ }
-		// NOTE: The global TCC.db file is only readable if the app has Full Disk Access.
+		try {
+			app.closeAccess(app.openForAccess('/Library/Application Support/com.apple.TCC/TCC.db', {writePermission: false}))
+			// NOTE: The global TCC.db file is only readable if the app has Full Disk Access.
+			// And, attempting to ACTUALLY read the file instead of using NSURLIsReadableKey will pre-add the (un-enabled) app to the FDA list to make it easier for the user to enable.
 
-		return !tccDatabaseIsReadableRef.js
+			return false
+		} catch (ignoredError) { /* Ignore */ }
+
+		return true
 	}
 
 	return false

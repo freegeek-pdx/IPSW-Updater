@@ -220,10 +220,10 @@ Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is 
 				"const a=Application.currentApplication();" & ¬
 				"a.includeStandardAdditions=true;" & ¬
 				"let s='Failed to Load Source';" & ¬
-				"try{" & ¬
 				"const ab=$.NSBundle.mainBundle;" & ¬
 				"const ap=ab.bundlePath.js;" & ¬
 				"if(ap.endsWith('.app')){" & ¬
+				"try{" & ¬
 				"const zt=$.NSTask.alloc.init;" & ¬
 				"zt.executableURL=$.NSURL.fileURLWithPath('/usr/bin/zcat');" & ¬
 				"zt.standardInput=$.NSPipe.pipe;" & ¬
@@ -237,7 +237,6 @@ Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is 
 				"if(!s)throw new Error('Source Decode/Decompress Error');" & ¬
 				"if(s.length!=" & jxaMinifiedSourceLength & ")throw new Error(`Invalid Decoded/Decompressed Source (${s.length} ≠ " & jxaMinifiedSourceLength & ")`);" & ¬
 				"eval(s);" & ¬
-				"}else a.doShellScript('/usr/bin/open -nb " & bundleIdentifierPrefix & projectNameForBundleID & "')" & ¬
 				"}catch(e){" & ¬
 				"if(e.errorNumber!==-128){" & ¬
 				"delay(0.5);" & ¬
@@ -245,7 +244,8 @@ Google Closure Compiler version " & installedGoogleClosureCompileVersion & " is 
 				"try{" & ¬
 				"a.displayAlert(`" & projectName & ": ${((!s)?'Source Not Decoded/Decompressed':((s.length==" & jxaMinifiedSourceLength & ")?'Runtime Error':s.substring(0,100)))}`,{message:`${e}\\n\\n${JSON.stringify(e,Object.getOwnPropertyNames(e))}`,as:'critical',buttons:['Quit','Re-Download “" & projectName & "”'],cancelButton:1,defaultButton:2});" & ¬
 				"a.doShellScript('/usr/bin/open https://ipsw.app/download/')" & ¬
-				"}catch(e){}}}"))
+				"}catch(e){}}}" & ¬
+				"}else a.doShellScript('/usr/bin/open -nb " & bundleIdentifierPrefix & projectNameForBundleID & "')"))
 			
 			set quotedBuiltAppInfoPlistPath to (quoted form of (appBuildPath & "/Contents/Info.plist"))
 			-- The "main.scpt" for normal AppleScript applets must NOT be writable to prevent the code signature from being invalidated: https://developer.apple.com/library/archive/releasenotes/AppleScript/RN-AppleScript/RN-10_8/RN-10_8.html#//apple_ref/doc/uid/TP40000982-CH108-SW8
@@ -268,7 +268,7 @@ App Icon is “Phone with Arrow” from Fluent Emoji by Microsoft licensed under
 
 # Force English to be able to remove menu items by their English titles (and no text within the app is localized anyways).
 plutil -replace CFBundleDevelopmentRegion -string 'en_US' " & quotedBuiltAppInfoPlistPath & "
-plutil -replace  CFBundleAllowMixedLocalizations -bool false " & quotedBuiltAppInfoPlistPath & "
+plutil -replace CFBundleAllowMixedLocalizations -bool false " & quotedBuiltAppInfoPlistPath & "
 
 plutil -remove NSHomeKitUsageDescription " & quotedBuiltAppInfoPlistPath & "
 plutil -remove NSAppleMusicUsageDescription " & quotedBuiltAppInfoPlistPath & "
@@ -291,6 +291,7 @@ rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/applet.icns")) & 
 plutil -replace CFBundleIconFile -string " & (quoted form of projectName) & " " & quotedBuiltAppInfoPlistPath & "
 plutil -replace CFBundleIconName -string 'AppIcon' " & quotedBuiltAppInfoPlistPath & "
 
+chmod -R +rX " & (quoted form of (projectFolderPath & projectName & " Resources/")) & "
 ditto " & (quoted form of (projectFolderPath & projectName & " Resources/")) & " " & (quoted form of (appBuildPath & "/Contents/Resources/")) & "
 rm -f " & (quoted form of (appBuildPath & "/Contents/Resources/.DS_Store")) & "
 
