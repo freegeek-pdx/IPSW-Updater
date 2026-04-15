@@ -31,7 +31,7 @@
 
 // @ts-nocheck: Do not check for TypeScript errors since there's a lot of JXA and JXA-ObjC code that would incorrectly show errors.
 
-const appVersion = '2026.3.25-1'
+const appVersion = '2026.4.15-1'
 
 ObjC.import('unistd') // For "getuid" function.
 ObjC.import('Security') // For "SecStaticCodeCheckValidity" and other functions for code signature validation.
@@ -1241,8 +1241,10 @@ try {
 				}
 			}
 
-		if (thisDisplayDeviceNames == 'iBridge2') thisDisplayDeviceNames = 'iBridge (for T2 Macs)'
-		else if (thisDisplayDeviceNames.includes('Mac')) thisDisplayDeviceNames = `Apple Silicon ${thisDisplayDeviceNames}`
+		const thisDisplayDeviceNamesLower = thisDisplayDeviceNames.toLowerCase()
+		if (thisDisplayDeviceNamesLower == 'ibridge2') thisDisplayDeviceNames = 'iBridge (for T2 Macs)'
+		else if (thisDisplayDeviceNamesLower == 'imac, mac mini, mac pro, mac studio, macbook air, macbook neo, macbook pro') thisDisplayDeviceNames = 'Apple Silicon Macs'
+		else if (thisDisplayDeviceNamesLower.includes('mac')) thisDisplayDeviceNames = `Apple Silicon ${thisDisplayDeviceNames}`
 
 		uniqueFirmwares[thisFirmwareFileName].displayDeviceNames = thisDisplayDeviceNames
 		uniqueDeviceNamesForFirmwareFileNames[thisDisplayDeviceNames] = thisFirmwareFileName
@@ -1328,7 +1330,7 @@ if (uniqueFirmwaresCount > 0) {
 			const firmwaresNeedingUpdateSoFarCount = Object.keys(firmwaresNeedingUpdate).length
 
 			const thisDisplayDeviceNames = uniqueFirmwares[thisFirmwareFileName].displayDeviceNames
-			const thisDisplayDeviceNamesTruncated = ((thisDisplayDeviceNames.length > 81) ? `${thisDisplayDeviceNames.slice(0, 40)}…${thisDisplayDeviceNames.slice(thisDisplayDeviceNames.length - 40)}` : thisDisplayDeviceNames)
+			const thisDisplayDeviceNamesTruncated = ((thisDisplayDeviceNames.length > 91) ? `${thisDisplayDeviceNames.slice(0, 45)}…${thisDisplayDeviceNames.slice(thisDisplayDeviceNames.length - 45)}` : thisDisplayDeviceNames)
 
 			Progress.additionalDescription = `
 ️🔍 Checking ${Progress.completedUnitCount} of ${uniqueFirmwaresCount}: ${thisDisplayDeviceNamesTruncated}
@@ -1418,7 +1420,7 @@ if (firmwaresNeedingUpdateCount > 0) {
 
 for (const thisFirmwareFileName in firmwaresNeedingUpdate) {
 	const thisDisplayDeviceNames = firmwaresNeedingUpdate[thisFirmwareFileName].displayDeviceNames
-	const thisDisplayDeviceNamesTruncated = ((thisDisplayDeviceNames.length > 81) ? `${thisDisplayDeviceNames.slice(0, 40)}…${thisDisplayDeviceNames.slice(thisDisplayDeviceNames.length - 40)}` : thisDisplayDeviceNames)
+	const thisDisplayDeviceNamesTruncated = ((thisDisplayDeviceNames.length > 91) ? `${thisDisplayDeviceNames.slice(0, 45)}…${thisDisplayDeviceNames.slice(thisDisplayDeviceNames.length - 45)}` : thisDisplayDeviceNames)
 
 	try {
 		setProgressStopButtonEnabled(false)
@@ -1434,7 +1436,7 @@ for (const thisFirmwareFileName in firmwaresNeedingUpdate) {
 		const thisProductSoftwareUpdatesFolder = firmwaresNeedingUpdate[thisFirmwareFileName].productSoftwareUpdatesFolder
 		const iTunesSoftwareUpdatesFilePath = `${thisProductSoftwareUpdatesFolder}/${thisFirmwareFileName}`
 
-		const thisFirmwareFileNameDisplay = ((thisFirmwareFileName.length > 81) ? `${thisFirmwareFileName.slice(0, 40)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 40)}` : thisFirmwareFileName)
+		const thisFirmwareFileNameDisplay = ((thisFirmwareFileName.length > 91) ? `${thisFirmwareFileName.slice(0, 45)}…${thisFirmwareFileName.slice(thisFirmwareFileName.length - 45)}` : thisFirmwareFileName)
 
 		const intendedFirmwareFileSize = firmwaresNeedingUpdate[thisFirmwareFileName].size
 		const intendedFirmwareFileSizeDisplay = formatBytes(intendedFirmwareFileSize)
