@@ -71,7 +71,7 @@ Designed and Developed by Pico Mitchell")) & " " & (quoted form of infoPlistPath
 			set currentAppleEventsUsageDescription to ((do shell script "/usr/libexec/PlistBuddy -c 'Print :NSAppleEventsUsageDescription' " & (quoted form of infoPlistPath)) as text)
 			if (currentAppleEventsUsageDescription does not contain (name of me)) then error "INCORRECT AppleEvents Usage Description"
 		on error
-			do shell script "plutil -replace NSAppleEventsUsageDescription -string " & (quoted form of ("You MUST click the “OK” button for “" & (name of me) & "” to be able to function.")) & " " & (quoted form of infoPlistPath)
+			do shell script "plutil -replace NSAppleEventsUsageDescription -string " & (quoted form of ("You MUST click the “Allow” button for “" & (name of me) & "” to be able to function.")) & " " & (quoted form of infoPlistPath)
 		end try
 		
 		try

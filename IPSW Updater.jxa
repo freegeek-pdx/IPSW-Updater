@@ -31,7 +31,7 @@
 
 // @ts-nocheck: Do not check for TypeScript errors since there's a lot of JXA and JXA-ObjC code that would incorrectly show errors.
 
-const appVersion = '2026.4.15-1'
+const appVersion = '2026.9.11-1'
 
 ObjC.import('unistd') // For "getuid" function.
 ObjC.import('Security') // For "SecStaticCodeCheckValidity" and other functions for code signature validation.
@@ -213,7 +213,10 @@ standardUserDefaults.registerDefaults({
 	AcknowledgedSignificantResults: true,
 	ImmediatelyDeleteOutdatedFirmwares: false,
 	DeleteAppleConfiguratorTemporaryFiles: false,
-	ForceDialogWindowStyle: false
+	ForceDialogWindowStyle: false,
+	CustomMobileFirmwareFolder: '',
+	CustomOtherFirmwareFolder: '',
+	CustomTemporaryExtractionFolder: ''
 })
 
 let uuid = getPreference('UUID', 'string')
@@ -586,13 +589,33 @@ if (fileManager.fileExistsAtPath(launchAgentPlistPath)) { // Check if a LaunchAg
 	// which would not get parsed correctly by "launchd" and cause the app to incorrectly be automatically launched every minute or every hour.
 }
 
+const quitAppBundleIDsBeforeStarting = ['com.apple.configurator.ui']
+for (const quitAppBundleID of quitAppBundleIDsBeforeStarting)
+	try {
+		const runningApps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(quitAppBundleID).js
+		for (const thisRunningApp of runningApps) {
+			thisRunningApp.terminate
+		}
+	} catch (ignoredError) { /* Ignore */ }
+
 const libraryITunesFolder = `${userLibraryFolder}/iTunes`
 if (!fileManager.fileExistsAtPath(libraryITunesFolder))
 	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(libraryITunesFolder, true, {}, $())
 
 const appleConfiguratorFirmwareFolder = `${userLibraryFolder}/Group Containers/K36BKF7T3D.group.com.apple.configurator/Library/Caches/Firmware`
-if (!fileManager.fileExistsAtPath(appleConfiguratorFirmwareFolder) && !needsFullDiskAccess()) // On macOS 15 Sequoia, there is a new "would like to access data from other apps" prompt that comes up when accessing the Apple Configurator Group Container each run unless the app has Full Disk Access.
-	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(appleConfiguratorFirmwareFolder, true, {}, $())
+const customMobileFirmwareFolder = $(getPreference('CustomMobileFirmwareFolder', 'string')).stringByResolvingSymlinksInPath.js
+const customOtherFirmwareFolder = $(getPreference('CustomOtherFirmwareFolder', 'string')).stringByResolvingSymlinksInPath.js
+
+if (!needsFullDiskAccess()) {
+	if (!fileManager.fileExistsAtPath(appleConfiguratorFirmwareFolder)) // On macOS 15 Sequoia, there is a new "would like to access data from other apps" prompt that comes up when accessing the Apple Configurator Group Container each run unless the app has Full Disk Access.
+		fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(appleConfiguratorFirmwareFolder, true, {}, $())
+
+	if (!fileManager.fileExistsAtPath(customMobileFirmwareFolder))
+		fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(customMobileFirmwareFolder, true, {}, $())
+
+	if (!fileManager.fileExistsAtPath(customOtherFirmwareFolder))
+		fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(customOtherFirmwareFolder, true, {}, $())
+}
 
 try { fileManager.removeItemAtPathError(temporaryFilesFolder, $()) } catch (ignoredError) { /* Ignore */ }
 
@@ -652,6 +675,12 @@ To use ${appName}, you must agree to let it manage your iTunes Software Updates 
 
 if (!fileManager.fileExistsAtPath(appleConfiguratorFirmwareFolder))
 	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(appleConfiguratorFirmwareFolder, true, {}, $())
+
+if (!fileManager.fileExistsAtPath(customMobileFirmwareFolder))
+	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(customMobileFirmwareFolder, true, {}, $())
+
+if (!fileManager.fileExistsAtPath(customOtherFirmwareFolder))
+	fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(customOtherFirmwareFolder, true, {}, $())
 
 Progress.totalUnitCount = (isTahoeOrNewer ? 1 : -1)
 // There is a bug in macOS 26 Tahoe where setting indeterminate progress at launch just displays 0 progress, EVEN IF manually running startAnimation on the NSProgressIndicator directly.
@@ -1007,7 +1036,7 @@ try {
 		const productTypesToMoveOutOfAppleConfiguratorFirmwareFolder = ['iPhone', 'iPad', 'iPod']
 		for (const thisFirmwareFileNameInSoftwareUpdatesFolder of ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(appleConfiguratorFirmwareFolder, $())))
 			for (const thisProductType of productTypesToMoveOutOfAppleConfiguratorFirmwareFolder)
-				if (thisFirmwareFileNameInSoftwareUpdatesFolder.startsWith(thisProductType)) {
+				if (thisFirmwareFileNameInSoftwareUpdatesFolder.startsWith(thisProductType) && thisFirmwareFileNameInSoftwareUpdatesFolder.endsWith('.ipsw')) {
 					const thisIntendedSoftwareUpdatesFolder = `${libraryITunesFolder}/${thisProductType} Software Updates`
 
 					if (fileManager.fileExistsAtPath(`${thisIntendedSoftwareUpdatesFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`))
@@ -1033,12 +1062,13 @@ try {
 
 		for (const thisProductType of productTypesToMoveOutOfLibraryITunesSoftwareUpdatesFolders)
 			if (fileManager.fileExistsAtPath(`${libraryITunesFolder}/${thisProductType} Software Updates`)) {
-				for (const thisFirmwareFileNameInSoftwareUpdatesFolder of ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(`${libraryITunesFolder}/${thisProductType} Software Updates`, $()))) {
-					if (fileManager.fileExistsAtPath(`${appleConfiguratorFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`))
-						try { fileManager.removeItemAtPathError(`${appleConfiguratorFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
+				for (const thisFirmwareFileNameInSoftwareUpdatesFolder of ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(`${libraryITunesFolder}/${thisProductType} Software Updates`, $())))
+					if (thisFirmwareFileNameInSoftwareUpdatesFolder.endsWith('.ipsw')) {
+						if (fileManager.fileExistsAtPath(`${appleConfiguratorFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`))
+							try { fileManager.removeItemAtPathError(`${appleConfiguratorFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
 
-					try { fileManager.moveItemAtPathToPathError(`${libraryITunesFolder}/${thisProductType} Software Updates/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, `${appleConfiguratorFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
-				}
+						try { fileManager.moveItemAtPathToPathError(`${libraryITunesFolder}/${thisProductType} Software Updates/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, `${appleConfiguratorFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
+					}
 
 				try { fileManager.removeItemAtPathError(`${libraryITunesFolder}/${thisProductType} Software Updates`, $()) } catch (ignoredError) { /* Ignore */ }
 			}
@@ -1047,6 +1077,49 @@ try {
 	debugLog('Move Apple TV, HomePod, iBridge, and Apple Silicon Mac Firmware Out Of iTunes Software Updates Folders Error', moveOutOfLibraryITunesSoftwareUpdatesFoldersError)
 
 	if (!userDidCancel) userDidCancel = (moveOutOfLibraryITunesSoftwareUpdatesFoldersError.errorNumber === -128)
+}
+
+if (fileManager.fileExistsAtPath(customMobileFirmwareFolder)) {
+	try {
+		if (fileManager.fileExistsAtPath(libraryITunesFolder)) {
+			for (const thisSoftwareUpdatesFolder of ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(libraryITunesFolder, $())))
+				if (thisSoftwareUpdatesFolder.endsWith(' Software Updates')) {
+					for (const thisFirmwareFileNameInSoftwareUpdatesFolder of ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(`${libraryITunesFolder}/${thisSoftwareUpdatesFolder}`, $())))
+						if (thisFirmwareFileNameInSoftwareUpdatesFolder.endsWith('.ipsw')) {
+							if (fileManager.fileExistsAtPath(`${customMobileFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`))
+								try { fileManager.removeItemAtPathError(`${customMobileFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
+
+							try { fileManager.moveItemAtPathToPathError(`${libraryITunesFolder}/${thisSoftwareUpdatesFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, `${customMobileFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
+						}
+
+					try { fileManager.removeItemAtPathError(`${libraryITunesFolder}/${thisSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
+				}
+		}
+	} catch (moveOutOfLibraryITunesSoftwareUpdatesFoldersError) {
+		debugLog('Move Mobile Firmware Out Of iTunes Software Updates Folders to Custom Folder Error', moveOutOfLibraryITunesSoftwareUpdatesFoldersError)
+
+		if (!userDidCancel) userDidCancel = (moveOutOfLibraryITunesSoftwareUpdatesFoldersError.errorNumber === -128)
+	}
+}
+
+if (fileManager.fileExistsAtPath(customOtherFirmwareFolder)) {
+	try {
+		if (fileManager.fileExistsAtPath(appleConfiguratorFirmwareFolder)) {
+			for (const thisFirmwareFileNameInSoftwareUpdatesFolder of ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(appleConfiguratorFirmwareFolder, $())))
+				if (thisFirmwareFileNameInSoftwareUpdatesFolder.endsWith('.ipsw')) {
+					if (fileManager.fileExistsAtPath(`${customOtherFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`))
+						try { fileManager.removeItemAtPathError(`${customOtherFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
+					else if (!fileManager.fileExistsAtPath(customOtherFirmwareFolder))
+						fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(customOtherFirmwareFolder, true, {}, $())
+
+					try { fileManager.moveItemAtPathToPathError(`${appleConfiguratorFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, `${customOtherFirmwareFolder}/${thisFirmwareFileNameInSoftwareUpdatesFolder}`, $()) } catch (ignoredError) { /* Ignore */ }
+				}
+		}
+	} catch (moveOutOfAppleConfiguratorFirmwareFolderError) {
+		debugLog('Move Other Firmware Out Of Apple Configurator Firmware Folder to Custom Folder Error', moveOutOfAppleConfiguratorFirmwareFolderError)
+
+		if (!userDidCancel) userDidCancel = (moveOutOfAppleConfiguratorFirmwareFolderError.errorNumber === -128)
+	}
 }
 
 if (shouldDeleteAppleConfiguratorTemporaryFiles) {
@@ -1062,6 +1135,13 @@ if (shouldDeleteAppleConfiguratorTemporaryFiles) {
 		debugLog('Deleting Apple Configurator Temporary Download Folder')
 
 		try { fileManager.removeItemAtPathError(appleConfiguratorTemporaryDownloadFolder, $()) } catch (ignoredError) { /* Ignore */ }
+	}
+
+	const customTemporaryExtractionFolder = $(getPreference('CustomTemporaryExtractionFolder', 'string')).stringByResolvingSymlinksInPath.js
+	if (fileManager.fileExistsAtPath(customTemporaryExtractionFolder)) {
+		debugLog(`Deleting Custom Temporary Extraction Folder: ${customTemporaryExtractionFolder}`)
+
+		try { fileManager.removeItemAtPathError(customTemporaryExtractionFolder, $()) } catch (ignoredError) { /* Ignore */ }
 	}
 }
 
@@ -1256,7 +1336,9 @@ try {
 			if (thisDisplayDeviceNames.includes(thisProductType) || (thisDisplayDeviceNames.startsWith('iBridge') && thisProductType.includes('iBridge')) || (thisDisplayDeviceNames.includes('Mac') && thisProductType.includes('Silicon'))) {
 				uniqueFirmwares[thisFirmwareFileName].productType = thisProductType
 
-				const thisProductSoftwareUpdatesFolder = ((thisProductType.startsWith('iP')) ? `${libraryITunesFolder}/${thisProductType.replace(' touch', '')} Software Updates` : appleConfiguratorFirmwareFolder)
+				const thisProductSoftwareUpdatesFolder = ((thisProductType.startsWith('iP'))
+					? (fileManager.fileExistsAtPath(customMobileFirmwareFolder) ? customMobileFirmwareFolder : `${libraryITunesFolder}/${thisProductType.replace(' touch', '')} Software Updates`)
+					: (fileManager.fileExistsAtPath(customOtherFirmwareFolder) ? customOtherFirmwareFolder : appleConfiguratorFirmwareFolder))
 				uniqueFirmwares[thisFirmwareFileName].productSoftwareUpdatesFolder = thisProductSoftwareUpdatesFolder
 
 				if (fileManager.fileExistsAtPath(`${thisProductSoftwareUpdatesFolder}/${thisFirmwareFileName}`))
@@ -1868,7 +1950,9 @@ for ( ; ; ) {
 
 			for (const thisProductType of everyProductType)
 				if (!excludedProducts.includes(thisProductType)) {
-					const thisProductSoftwareUpdatesFolder = ((thisProductType.startsWith('iP')) ? `${libraryITunesFolder}/${thisProductType.replace(' touch', '')} Software Updates` : appleConfiguratorFirmwareFolder)
+					const thisProductSoftwareUpdatesFolder = ((thisProductType.startsWith('iP'))
+						? (fileManager.fileExistsAtPath(customMobileFirmwareFolder) ? customMobileFirmwareFolder : `${libraryITunesFolder}/${thisProductType.replace(' touch', '')} Software Updates`)
+						: (fileManager.fileExistsAtPath(customOtherFirmwareFolder) ? customOtherFirmwareFolder : appleConfiguratorFirmwareFolder))
 
 					if (!checkedSoftwareUpdatesFolderForUnsignedFirmware.includes(thisProductSoftwareUpdatesFolder)) {
 						try {
@@ -1906,7 +1990,10 @@ for ( ; ; ) {
 						if (!userDidCancel && downloadedAllUpdates) {
 							for (const thisProductType of everyProductType)
 								if (thisOldManagedFirmwareDisplayDeviceNames.includes(thisProductType) || (thisOldManagedFirmwareDisplayDeviceNames.startsWith('iBridge') && thisProductType.includes('iBridge')) || (thisOldManagedFirmwareDisplayDeviceNames.includes('Mac') && thisProductType.includes('Silicon'))) {
-									const thisOldManagedFirmwarePath = `${((thisProductType.startsWith('iP')) ? `${libraryITunesFolder}/${thisProductType.replace(' touch', '')} Software Updates` : appleConfiguratorFirmwareFolder)}/${thisOldManagedFirmwareFileName}`
+									const thisOldManagedFirmwarePath = `${((thisProductType.startsWith('iP'))
+										? (fileManager.fileExistsAtPath(customMobileFirmwareFolder) ? customMobileFirmwareFolder : `${libraryITunesFolder}/${thisProductType.replace(' touch', '')} Software Updates`)
+										: (fileManager.fileExistsAtPath(customOtherFirmwareFolder) ? customOtherFirmwareFolder : appleConfiguratorFirmwareFolder))
+									}/${thisOldManagedFirmwareFileName}`
 
 									if (fileManager.fileExistsAtPath(thisOldManagedFirmwarePath)) {
 										if (excludedProducts.includes(thisProductType))
@@ -3175,7 +3262,8 @@ Select Multiple: Click+Drag, Shift+Click, Command+Click`,
 
 	if (!excludeProductsArray.includes('iPhone') || !excludeProductsArray.includes('iPad') || !excludeProductsArray.includes('iPod touch') || !excludeProductsArray.includes('Apple TV')) {
 		const versionDescriptions = [
-			'iOS 26 / iPadOS 26 / tvOS 26 and Newer',
+			'iOS 27 / iPadOS 27 and Newer',
+			'iOS 26 and Newer	(iPad 8, iPad Air 3, iPad mini 5, iPad Pro 1st Gen 11-inch & 3rd Gen 12.9-inch, Apple TV HD)',
 			'iOS 18 and Newer	(iPhone XS & XR, iPad 7)',
 			'iOS 17 and Newer	(iPad 6, iPad Pro 10.5-inch & 2nd Gen 12.9-inch)',
 			'iOS 16 and Newer	(iPhone 8 - X, iPad 5, iPad Pro 9.7-inch & 1st Gen 12.9-inch)',
